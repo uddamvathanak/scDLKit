@@ -1,0 +1,42 @@
+name: ci
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[dev]
+      - name: Ruff
+        run: ruff check .
+      - name: Mypy
+        run: mypy src
+      - name: Pytest
+        run: pytest
+      - name: README smoke test
+        run: |
+          python - <<'PY'
+          import numpy as np
+          import pandas as pd
+          from anndata import AnnData
+          from scdlkit import TaskRunner
+          X = np.random.rand(20, 12).astype("float32")
+          obs = pd.DataFrame({"cell_type": ["a"] * 10 + ["b"] * 10})
+          adata = AnnData(X=X, obs=obs)
+          runner = TaskRunner(model="vae", task="representation", epochs=1, batch_size=4, latent_dim=4, hidden_dims=(8, 6), label_key="cell_type")
+          runner.fit(adata)
+          assert "pearson" in runner.evaluate()
+          PY

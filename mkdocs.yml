@@ -1,0 +1,32 @@
+site_name: scDLKit
+site_description: Deep learning baselines for single-cell data.
+site_url: https://uddamvathanak.github.io/scDLKit/
+repo_url: https://github.com/uddamvathanak/scDLKit
+repo_name: uddamvathanak/scDLKit
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - content.code.copy
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: ["src"]
+
+nav:
+  - Home: index.md
+  - Quickstart: quickstart.md
+  - Data Prep: data.md
+  - Models: models.md
+  - Training: training.md
+  - Evaluation: evaluation.md
+  - Visualization: visualization.md
+  - Comparison: comparison.md
+  - API Reference: api.md
+  - Roadmap: roadmap.md
+  - Contributing: contributing.md
