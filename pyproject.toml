@@ -1,0 +1,90 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scdlkit"
+version = "0.1.0"
+description = "AnnData-native deep learning baselines for single-cell data."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+  { name = "Vathanak Uddam" },
+]
+keywords = ["single-cell", "anndata", "bioinformatics", "deep-learning", "pytorch", "scRNA-seq"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Bio-Informatics",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+  "anndata>=0.10",
+  "matplotlib>=3.8",
+  "numpy>=1.26",
+  "pandas>=2.1",
+  "scikit-learn>=1.4",
+  "scipy>=1.11",
+  "seaborn>=0.13",
+  "torch>=2.3",
+  "tqdm>=4.66",
+  "umap-learn>=0.5",
+]
+
+[project.optional-dependencies]
+scanpy = ["scanpy>=1.10"]
+dev = [
+  "build>=1.2",
+  "mypy>=1.9",
+  "pytest>=8.2",
+  "pytest-cov>=5.0",
+  "ruff>=0.5",
+  "twine>=5.0",
+]
+docs = [
+  "mkdocs-material>=9.5",
+  "mkdocstrings[python]>=0.25",
+  "mkdocs-gen-files>=0.5",
+  "mkdocs-literate-nav>=0.6",
+  "jupyter>=1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/uddamvathanak/scDLKit"
+Documentation = "https://uddamvathanak.github.io/scDLKit/"
+Repository = "https://github.com/uddamvathanak/scDLKit"
+Issues = "https://github.com/uddamvathanak/scDLKit/issues"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-markers --strict-config"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "N", "S", "C4", "SIM"]
+ignore = ["S101"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+ignore_missing_imports = true
+exclude = ["examples/"]

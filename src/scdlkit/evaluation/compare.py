@@ -1,0 +1,69 @@
+"""Compare multiple models on the same AnnData workflow."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any
+
+import pandas as pd
+
+from scdlkit.evaluation.report import save_markdown_report
+from scdlkit.utils import ensure_directory
+
+
+@dataclass(slots=True)
+class BenchmarkResult:
+    """Collected results from comparing multiple models."""
+
+    metrics_frame: pd.DataFrame
+    runners: dict[str, Any]
+    output_paths: dict[str, str] = field(default_factory=dict)
+
+
+def compare_models(
+    adata: Any,
+    *,
+    models: list[str],
+    task: str,
+    shared_kwargs: dict[str, Any] | None = None,
+    output_dir: str | None = None,
+) -> BenchmarkResult:
+    """Train and evaluate several models with shared configuration."""
+
+    from scdlkit.runner import TaskRunner
+    from scdlkit.visualization.compare import plot_model_comparison
+
+    shared = dict(shared_kwargs or {})
+    records: list[dict[str, Any]] = []
+    runners: dict[str, TaskRunner] = {}
+    output_paths: dict[str, str] = {}
+    for model_name in models:
+        runner = TaskRunner(model=model_name, task=task, **shared)
+        runner.fit(adata)
+        metrics = runner.evaluate()
+        scalar_metrics = {k: v for k, v in metrics.items() if isinstance(v, (int, float))}
+        records.append({"model": model_name, **scalar_metrics})
+        runners[model_name] = runner
+
+    metrics_frame = pd.DataFrame.from_records(records).sort_values("model").reset_index(drop=True)
+    if output_dir is not None:
+        directory = ensure_directory(output_dir)
+        csv_path = directory / "benchmark_metrics.csv"
+        md_path = directory / "benchmark_report.md"
+        png_path = directory / "benchmark_comparison.png"
+        metrics_frame.to_csv(csv_path, index=False)
+        fig, _ = plot_model_comparison(metrics_frame)
+        fig.savefig(png_path, dpi=150, bbox_inches="tight")
+        report_lines = ["## Compared models", "", *[f"- `{name}`" for name in models]]
+        save_markdown_report(
+            {"num_models": len(models), "task": task},
+            path=md_path,
+            title="Benchmark Report",
+            extra_sections=report_lines,
+        )
+        output_paths = {
+            "metrics_csv": str(csv_path),
+            "report_md": str(md_path),
+            "comparison_png": str(png_path),
+        }
+    return BenchmarkResult(metrics_frame=metrics_frame, runners=runners, output_paths=output_paths)

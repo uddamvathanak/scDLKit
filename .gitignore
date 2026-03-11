@@ -1,0 +1,15 @@
+AGENTS.md
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+build/
+dist/
+site/
+artifacts/
+*.egg-info/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pt
