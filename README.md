@@ -20,6 +20,55 @@ Train, evaluate, compare, and visualize baseline deep-learning models for single
 
 ## Installation
 
+## Conda Setup (Recommended)
+
+Official installers:
+
+- Miniconda install guide: https://www.anaconda.com/docs/getting-started/miniconda/install
+- Anaconda Distribution download: https://www.anaconda.com/download
+
+Recommended path:
+
+1. Install Miniconda or Anaconda Distribution.
+2. Open Anaconda Prompt.
+3. Create the project environment from the repo root:
+
+```bash
+conda env create -f environment.yml
+conda activate scdlkit
+```
+
+4. Run the first simple example:
+
+```bash
+python examples/first_run_synthetic.py
+```
+
+This writes a report, checkpoint, loss curve, and latent PCA plot to `artifacts/first_run/`.
+
+If the environment already exists, update it with:
+
+```bash
+conda env update -n scdlkit -f environment.yml
+conda activate scdlkit
+```
+
+### Optional Notebook Extras
+
+The PBMC notebooks use `scanpy` and Jupyter. Install them only if you want the notebook demos:
+
+```bash
+python -m pip install scanpy jupyter
+```
+
+You can then run:
+
+```bash
+jupyter notebook
+```
+
+## Pip Install
+
 ```bash
 pip install scdlkit
 ```
@@ -32,6 +81,15 @@ pip install scdlkit[dev,docs]
 ```
 
 ## Quickstart
+
+Fastest first run from Conda:
+
+```bash
+conda activate scdlkit
+python examples/first_run_synthetic.py
+```
+
+Python API:
 
 ```python
 from scdlkit import TaskRunner
@@ -103,8 +161,21 @@ Project documentation is configured for GitHub Pages with MkDocs Material:
 - API reference: `docs/api.md`
 - Example notebooks: `examples/`
 
+### GitHub Pages Setup
+
+The docs workflow expects GitHub Pages to be enabled once at the repository level.
+
+1. Open `Settings -> Pages` for this repo:
+   `https://github.com/uddamvathanak/scDLKit/settings/pages`
+2. Under `Build and deployment`, set `Source` to `GitHub Actions`.
+3. Save the setting.
+4. Re-run the `docs` workflow.
+
+Without that one-time setting, `actions/deploy-pages` returns a `404` when it tries to create the deployment.
+
 ## Examples
 
+- `examples/first_run_synthetic.py`
 - `examples/train_vae_pbmc.ipynb`
 - `examples/compare_models_pbmc.ipynb`
 - `examples/classification_demo.ipynb`
