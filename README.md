@@ -38,6 +38,8 @@ conda env create -f environment.yml
 conda activate scdlkit
 ```
 
+The recommended environment pins Python 3.11 for the smoothest Windows and notebook setup.
+
 4. Run the first simple example:
 
 ```bash
@@ -46,6 +48,12 @@ python examples/first_run_synthetic.py
 
 This writes a report, checkpoint, loss curve, and latent PCA plot to `artifacts/first_run/`.
 
+5. If you prefer a notebook, the Conda environment already includes Jupyter for the beginner walkthrough:
+
+```bash
+jupyter notebook examples/first_run_synthetic.ipynb
+```
+
 If the environment already exists, update it with:
 
 ```bash
@@ -53,12 +61,14 @@ conda env update -n scdlkit -f environment.yml
 conda activate scdlkit
 ```
 
-### Optional Notebook Extras
+If you created the environment before the notebook-friendly setup was added, recreate it once so it picks up the current `h5py` and `torch` stack cleanly.
 
-The PBMC notebooks use `scanpy` and Jupyter. Install them only if you want the notebook demos:
+### Optional PBMC Notebook Extras
+
+The beginner notebook works from the default Conda environment. The PBMC notebooks still need `scanpy`:
 
 ```bash
-python -m pip install scanpy jupyter
+python -m pip install scanpy
 ```
 
 You can then run:
@@ -87,6 +97,13 @@ Fastest first run from Conda:
 ```bash
 conda activate scdlkit
 python examples/first_run_synthetic.py
+```
+
+Beginner notebook:
+
+```bash
+conda activate scdlkit
+jupyter notebook examples/first_run_synthetic.ipynb
 ```
 
 Python API:
@@ -171,10 +188,22 @@ The docs workflow expects GitHub Pages to be enabled once at the repository leve
 3. Save the setting.
 4. Re-run the `docs` workflow.
 
-Without that one-time setting, `actions/deploy-pages` returns a `404` when it tries to create the deployment.
+Without that one-time setting, GitHub returns a `404` when `actions/configure-pages` or `actions/deploy-pages` tries to access the Pages site.
+
+### Optional Automatic Pages Enablement
+
+If you want the workflow to bootstrap Pages automatically instead of doing the one-time manual setup:
+
+1. Create a repository secret named `PAGES_ENABLEMENT_TOKEN`.
+2. Use a Personal Access Token with `repo` scope or Pages write permission.
+3. Re-run the `docs` workflow.
+
+The workflow is configured to pass that secret to `actions/configure-pages@v5` with `enablement: true`. This matches the action's current requirements.
 
 ## Examples
 
+- `examples/first_run_synthetic.ipynb` is the easiest notebook walkthrough.
+- `examples/first_run_synthetic.ipynb`
 - `examples/first_run_synthetic.py`
 - `examples/train_vae_pbmc.ipynb`
 - `examples/compare_models_pbmc.ipynb`
