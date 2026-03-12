@@ -10,6 +10,16 @@ python examples/first_run_synthetic.py
 
 This is the smallest end-to-end example and writes artifacts to `artifacts/first_run/`.
 
+If you prefer a notebook, use:
+
+```bash
+jupyter notebook examples/first_run_synthetic.ipynb
+```
+
+The default Conda environment includes the notebook dependencies for this walkthrough.
+
+If you created `scdlkit` from an older environment file, recreate the environment once before using the notebook.
+
 ## Python API
 
 ```python
@@ -44,10 +54,10 @@ trainer = Trainer(model=model, task="representation", epochs=15)
 trainer.fit(prepared.train, prepared.val)
 ```
 
-## Optional notebook extras
+## Optional PBMC notebook extras
 
-The PBMC notebooks need Scanpy and Jupyter:
+The beginner notebook works from the default Conda environment. The PBMC notebooks still need Scanpy:
 
 ```bash
-python -m pip install scanpy jupyter
+python -m pip install scanpy
 ```

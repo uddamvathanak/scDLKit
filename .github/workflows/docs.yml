@@ -20,7 +20,20 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Configure GitHub Pages
+        id: pages
         uses: actions/configure-pages@v5
+        continue-on-error: true
+        with:
+          token: ${{ secrets.PAGES_ENABLEMENT_TOKEN != '' && secrets.PAGES_ENABLEMENT_TOKEN || github.token }}
+          enablement: ${{ secrets.PAGES_ENABLEMENT_TOKEN != '' }}
+      - name: Check GitHub Pages configuration
+        if: ${{ steps.pages.outcome == 'failure' }}
+        run: |
+          echo "::error::GitHub Pages is not enabled for this repository."
+          echo "::error::Fix it in one of two ways:"
+          echo "::error::1. In Settings -> Pages, set Source to GitHub Actions."
+          echo "::error::2. Add a PAGES_ENABLEMENT_TOKEN secret with repo scope or Pages write permission so actions/configure-pages can enable Pages automatically."
+          exit 1
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
