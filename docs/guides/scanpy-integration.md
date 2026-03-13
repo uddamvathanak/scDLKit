@@ -30,11 +30,15 @@ runner = TaskRunner(
     device="auto",
     epochs=10,
     batch_size=128,
+    model_kwargs={"kl_weight": 1e-3},
 )
 
 runner.fit(adata)
 adata.obsm["X_scdlkit_vae"] = runner.encode(adata)
 ```
+
+For this single-cell baseline, use a light VAE KL term so PBMC populations remain
+visibly separable in the latent UMAP.
 
 ## Continue with Scanpy
 

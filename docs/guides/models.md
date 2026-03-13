@@ -23,6 +23,9 @@ scDLKit v0.1.1 remains deliberately baseline-focused.
 - Use `transformer_ae` when you want an attention-based baseline in comparisons.
 - Use `mlp_classifier` for direct supervised classification from expression features.
 
+For single-cell representation learning, a lighter VAE `kl_weight` often gives
+better latent separation than a vanilla `beta=1` setup.
+
 ## Example
 
 ```python
