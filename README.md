@@ -10,6 +10,13 @@
 
 Train, evaluate, compare, and visualize baseline deep-learning models for single-cell data without writing PyTorch from scratch.
 
+## Start Here
+
+- Documentation site: https://uddamvathanak.github.io/scDLKit/
+- Beginner Jupyter notebook: `examples/first_run_synthetic.ipynb`
+- Beginner script: `examples/first_run_synthetic.py`
+- PBMC notebooks: `examples/train_vae_pbmc.ipynb`, `examples/compare_models_pbmc.ipynb`, `examples/classification_demo.ipynb`
+
 ## Why scDLKit
 
 - AnnData-native workflow for single-cell users.
@@ -68,9 +75,18 @@ metrics = runner.evaluate()
 runner.plot_losses()
 ```
 
-## Repo examples
+## Notebook-First Examples
 
-If you cloned the repository, the easiest end-to-end demo is:
+Most researchers will want to start with the beginner notebook:
+
+```bash
+python -m pip install "scdlkit[notebook]"
+jupyter notebook examples/first_run_synthetic.ipynb
+```
+
+This notebook creates a small synthetic `AnnData`, trains a baseline model with `TaskRunner`, evaluates it, and writes plots and reports to `artifacts/first_run_notebook/`.
+
+If you prefer a script-based run:
 
 ```bash
 python examples/first_run_synthetic.py
@@ -78,14 +94,13 @@ python examples/first_run_synthetic.py
 
 This writes a report, checkpoint, loss curve, and latent PCA plot to `artifacts/first_run/`.
 
-If you want the beginner notebook after cloning the repo:
+Additional notebook workflows:
 
-```bash
-python -m pip install "scdlkit[notebook]"
-jupyter notebook examples/first_run_synthetic.ipynb
-```
+- `examples/train_vae_pbmc.ipynb`: first PBMC VAE walkthrough
+- `examples/compare_models_pbmc.ipynb`: baseline comparison on PBMC data
+- `examples/classification_demo.ipynb`: supervised classification example
 
-The heavier notebooks still need Scanpy:
+The heavier PBMC notebooks still need Scanpy:
 
 ```bash
 python -m pip install "scdlkit[scanpy]"
