@@ -18,29 +18,59 @@ Train, evaluate, compare, and visualize baseline deep-learning models for single
 - Reproducible reports and notebooks for portfolio-ready demonstrations.
 - Extensible registry-based architecture for custom models and future tasks.
 
+## Supported platforms
+
+- Linux: supported
+- macOS: supported
+- Windows: supported
+
 ## Installation
 
-## Conda Setup (Recommended)
-
-Official installers:
-
-- Miniconda install guide: https://www.anaconda.com/docs/getting-started/miniconda/install
-- Anaconda Distribution download: https://www.anaconda.com/download
-
-Recommended path:
-
-1. Install Miniconda or Anaconda Distribution.
-2. Open Anaconda Prompt.
-3. Create the project environment from the repo root:
+Primary public install path:
 
 ```bash
-conda env create -f environment.yml
-conda activate scdlkit
+python -m pip install scdlkit
 ```
 
-The recommended environment pins Python 3.11 for the smoothest Windows and notebook setup.
+Optional extras:
 
-4. Run the first simple example:
+```bash
+python -m pip install "scdlkit[scanpy]"
+python -m pip install "scdlkit[notebook]"
+python -m pip install "scdlkit[dev,docs]"
+```
+
+## Quickstart
+
+Smallest package-level run:
+
+```python
+import numpy as np
+import pandas as pd
+from anndata import AnnData
+from scdlkit import TaskRunner
+
+X = np.random.rand(120, 32).astype("float32")
+obs = pd.DataFrame({"cell_type": ["T-cell"] * 60 + ["B-cell"] * 60})
+adata = AnnData(X=X, obs=obs)
+
+runner = TaskRunner(
+    model="vae",
+    task="representation",
+    latent_dim=8,
+    epochs=5,
+    batch_size=16,
+    label_key="cell_type",
+)
+
+runner.fit(adata)
+metrics = runner.evaluate()
+runner.plot_losses()
+```
+
+## Repo examples
+
+If you cloned the repository, the easiest end-to-end demo is:
 
 ```bash
 python examples/first_run_synthetic.py
@@ -48,84 +78,33 @@ python examples/first_run_synthetic.py
 
 This writes a report, checkpoint, loss curve, and latent PCA plot to `artifacts/first_run/`.
 
-5. If you prefer a notebook, the Conda environment already includes Jupyter for the beginner walkthrough:
+If you want the beginner notebook after cloning the repo:
 
 ```bash
+python -m pip install "scdlkit[notebook]"
 jupyter notebook examples/first_run_synthetic.ipynb
 ```
 
-If the environment already exists, update it with:
+The heavier notebooks still need Scanpy:
 
 ```bash
-conda env update -n scdlkit -f environment.yml
+python -m pip install "scdlkit[scanpy]"
+```
+
+## Optional contributor Conda environment
+
+Conda is kept for contributors and demos. It is not the primary public install path for `v0.1.0`.
+
+Official installers:
+
+- Miniconda install guide: https://www.anaconda.com/docs/getting-started/miniconda/install
+- Anaconda Distribution download: https://www.anaconda.com/download
+
+From the repo root:
+
+```bash
+conda env create -f environment.yml
 conda activate scdlkit
-```
-
-If you created the environment before the notebook-friendly setup was added, recreate it once so it picks up the current `h5py` and `torch` stack cleanly.
-
-### Optional PBMC Notebook Extras
-
-The beginner notebook works from the default Conda environment. The PBMC notebooks still need `scanpy`:
-
-```bash
-python -m pip install scanpy
-```
-
-You can then run:
-
-```bash
-jupyter notebook
-```
-
-## Pip Install
-
-```bash
-pip install scdlkit
-```
-
-Optional extras:
-
-```bash
-pip install scdlkit[scanpy]
-pip install scdlkit[dev,docs]
-```
-
-## Quickstart
-
-Fastest first run from Conda:
-
-```bash
-conda activate scdlkit
-python examples/first_run_synthetic.py
-```
-
-Beginner notebook:
-
-```bash
-conda activate scdlkit
-jupyter notebook examples/first_run_synthetic.ipynb
-```
-
-Python API:
-
-```python
-from scdlkit import TaskRunner
-
-runner = TaskRunner(
-    model="vae",
-    task="representation",
-    latent_dim=32,
-    epochs=25,
-    batch_size=256,
-    label_key="cell_type",
-    batch_key="batch",
-)
-
-runner.fit(adata)
-metrics = runner.evaluate()
-runner.plot_losses()
-runner.plot_latent(method="umap", color="label")
-runner.save_report("artifacts/report.md")
 ```
 
 ## Core APIs
@@ -156,7 +135,7 @@ benchmark = compare_models(
 )
 ```
 
-## Supported Models
+## Supported models
 
 - `autoencoder`
 - `vae`
@@ -164,7 +143,7 @@ benchmark = compare_models(
 - `transformer_ae`
 - `mlp_classifier`
 
-## Supported Tasks
+## Supported tasks
 
 - `representation`
 - `reconstruction`
@@ -178,7 +157,7 @@ Project documentation is configured for GitHub Pages with MkDocs Material:
 - API reference: `docs/api.md`
 - Example notebooks: `examples/`
 
-### GitHub Pages Setup
+### GitHub Pages setup
 
 The docs workflow expects GitHub Pages to be enabled once at the repository level.
 
@@ -190,7 +169,7 @@ The docs workflow expects GitHub Pages to be enabled once at the repository leve
 
 Without that one-time setting, GitHub returns a `404` when `actions/configure-pages` or `actions/deploy-pages` tries to access the Pages site.
 
-### Optional Automatic Pages Enablement
+### Optional automatic Pages enablement
 
 If you want the workflow to bootstrap Pages automatically instead of doing the one-time manual setup:
 
@@ -198,13 +177,17 @@ If you want the workflow to bootstrap Pages automatically instead of doing the o
 2. Use a Personal Access Token with `repo` scope or Pages write permission.
 3. Re-run the `docs` workflow.
 
-The workflow is configured to pass that secret to `actions/configure-pages@v5` with `enablement: true`. This matches the action's current requirements.
+## Release flow
+
+- Stage to TestPyPI first with `release-testpypi.yml`.
+- Publish the final release from a `v*` tag with `release.yml`.
+- Use trusted publishing instead of long-lived PyPI API tokens.
+- See [`RELEASING.md`](RELEASING.md) for the full checklist.
 
 ## Examples
 
 - `examples/first_run_synthetic.ipynb` is the easiest notebook walkthrough.
-- `examples/first_run_synthetic.ipynb`
-- `examples/first_run_synthetic.py`
+- `examples/first_run_synthetic.py` is the easiest script walkthrough.
 - `examples/train_vae_pbmc.ipynb`
 - `examples/compare_models_pbmc.ipynb`
 - `examples/classification_demo.ipynb`
@@ -214,8 +197,8 @@ The workflow is configured to pass that secret to `actions/configure-pages@v5` w
 `v0.1`
 
 - Expanded core workflow with training, evaluation, reporting, and plotting.
-- PyPI packaging and CI.
-- Docs site and reproducible notebooks.
+- Staged TestPyPI and PyPI publishing.
+- Cross-platform smoke validation and reproducible notebooks.
 
 `v0.2`
 
