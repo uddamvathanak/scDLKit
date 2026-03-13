@@ -1,4 +1,4 @@
-# Quickstart
+# Install and Quickstart
 
 ## Public install path
 
@@ -8,16 +8,32 @@ Install the package from PyPI:
 python -m pip install scdlkit
 ```
 
-Install the notebook extra if you want to execute the beginner notebook:
+Install notebook support for the beginner tutorial notebook:
 
 ```bash
 python -m pip install "scdlkit[notebook]"
 ```
 
-Install the Scanpy extra if you want the PBMC notebooks:
+Install Scanpy support for the PBMC tutorials:
 
 ```bash
 python -m pip install "scdlkit[scanpy]"
+```
+
+## Fastest way to learn the package
+
+Most users should start with the notebook-first path:
+
+```bash
+jupyter notebook examples/first_run_synthetic.ipynb
+```
+
+That walkthrough creates a synthetic `AnnData`, fits a baseline model with `TaskRunner`, evaluates it, and writes plots plus reports to `artifacts/first_run_notebook/`.
+
+If you prefer a script-based first run:
+
+```bash
+python examples/first_run_synthetic.py
 ```
 
 ## Minimal Python API example
@@ -43,21 +59,14 @@ runner = TaskRunner(
 
 runner.fit(adata)
 metrics = runner.evaluate()
+runner.plot_losses()
 ```
 
-## Repo examples
+## What to open next
 
-If you cloned the repository, the smallest end-to-end example is:
-
-```bash
-python examples/first_run_synthetic.py
-```
-
-If you want the beginner notebook after cloning the repo:
-
-```bash
-jupyter notebook examples/first_run_synthetic.ipynb
-```
+- For notebook workflows, go to [Tutorials](tutorials.md)
+- For lower-level training control, go to [Training](training.md)
+- For model selection, go to [Models](models.md)
 
 ## Optional contributor Conda setup
 
