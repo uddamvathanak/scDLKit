@@ -24,7 +24,9 @@ NOTEBOOK_MAP = {
 ASSET_MAP = {
     "first_run_loss_curve.png": ROOT / "artifacts" / "first_run_notebook" / "loss_curve.png",
     "first_run_latent_pca.png": ROOT / "artifacts" / "first_run_notebook" / "latent_pca.png",
-    "pbmc_benchmark_comparison.png": ROOT / "artifacts" / "pbmc_compare" / "benchmark_comparison.png",
+    "pbmc_benchmark_comparison.png": (
+        ROOT / "artifacts" / "pbmc_compare" / "benchmark_comparison.png"
+    ),
 }
 
 
