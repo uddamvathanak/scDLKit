@@ -2,9 +2,9 @@
 
 [![CI](https://img.shields.io/github/actions/workflow/status/uddamvathanak/scDLKit/ci.yml?label=ci)](https://github.com/uddamvathanak/scDLKit/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/github/actions/workflow/status/uddamvathanak/scDLKit/docs.yml?label=docs)](https://github.com/uddamvathanak/scDLKit/actions/workflows/docs.yml)
-[![PyPI version](https://img.shields.io/pypi/v/scdlkit)](https://pypi.org/project/scdlkit/)
-[![Python versions](https://img.shields.io/pypi/pyversions/scdlkit)](https://pypi.org/project/scdlkit/)
-[![License](https://img.shields.io/pypi/l/scdlkit)](LICENSE)
+[![PyPI version](https://img.shields.io/pypi/v/scdlkit?cacheSeconds=300)](https://pypi.org/project/scdlkit/)
+[![Python versions](https://img.shields.io/pypi/pyversions/scdlkit?cacheSeconds=300)](https://pypi.org/project/scdlkit/)
+[![License](https://img.shields.io/pypi/l/scdlkit?cacheSeconds=300)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/uddamvathanak/scDLKit?style=social)](https://github.com/uddamvathanak/scDLKit/stargazers)
 [![Downloads](https://static.pepy.tech/badge/scdlkit)](https://pepy.tech/projects/scdlkit)
 
