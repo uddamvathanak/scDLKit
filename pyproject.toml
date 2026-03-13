@@ -39,6 +39,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+notebook = ["jupyter>=1.0"]
 scanpy = ["scanpy>=1.10"]
 dev = [
   "build>=1.2",
@@ -58,6 +59,7 @@ docs = [
 
 [project.urls]
 Homepage = "https://github.com/uddamvathanak/scDLKit"
+Changelog = "https://github.com/uddamvathanak/scDLKit/blob/main/CHANGELOG.md"
 Documentation = "https://uddamvathanak.github.io/scDLKit/"
 Repository = "https://github.com/uddamvathanak/scDLKit"
 Issues = "https://github.com/uddamvathanak/scDLKit/issues"

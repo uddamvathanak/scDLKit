@@ -3,12 +3,11 @@ title: scDLKit
 message: "If you use scDLKit, please cite the software entry below."
 type: software
 authors:
-  - family-names: Rom
-    given-names: uddamvathanak
+  - family-names: Uddam
+    given-names: Vathanak
 repository-code: "https://github.com/uddamvathanak/scDLKit"
 license: MIT
 version: 0.1.0
-date-released: 2026-03-11
 abstract: >-
   scDLKit is an AnnData-native Python toolkit for training, evaluating,
   comparing, and visualizing baseline deep-learning models for single-cell data.

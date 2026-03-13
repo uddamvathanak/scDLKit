@@ -9,7 +9,7 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
-  test:
+  linux-quality:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -31,17 +31,39 @@ jobs:
         run: mypy src
       - name: Pytest
         run: pytest
-      - name: README smoke test
+      - name: Public API smoke test
+        run: python scripts/smoke_taskrunner.py
+
+  cross-platform-smoke:
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Install package and notebook tooling
         run: |
-          python - <<'PY'
-          import numpy as np
-          import pandas as pd
-          from anndata import AnnData
-          from scdlkit import TaskRunner
-          X = np.random.rand(20, 12).astype("float32")
-          obs = pd.DataFrame({"cell_type": ["a"] * 10 + ["b"] * 10})
-          adata = AnnData(X=X, obs=obs)
-          runner = TaskRunner(model="vae", task="representation", epochs=1, batch_size=4, latent_dim=4, hidden_dims=(8, 6), label_key="cell_type")
-          runner.fit(adata)
-          assert "pearson" in runner.evaluate()
-          PY
+          python -m pip install --upgrade pip
+          python -m pip install -e .[dev,docs]
+      - name: Pytest
+        run: pytest
+      - name: Public API smoke test
+        run: python scripts/smoke_taskrunner.py
+      - name: Script walkthrough
+        run: python examples/first_run_synthetic.py
+      - name: Prepare notebook artifact directory
+        run: python -c "from pathlib import Path; Path('artifacts/notebooks').mkdir(parents=True, exist_ok=True)"
+      - name: Execute beginner notebook
+        run: python -m jupyter nbconvert --to notebook --execute examples/first_run_synthetic.ipynb --output first_run_synthetic.ci.executed.ipynb --output-dir artifacts/notebooks --ExecutePreprocessor.timeout=0
+      - name: Upload smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-${{ matrix.os }}
+          path: artifacts

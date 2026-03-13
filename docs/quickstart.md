@@ -1,63 +1,69 @@
 # Quickstart
 
-## Recommended Conda setup
+## Public install path
+
+Install the package from PyPI:
 
 ```bash
-conda env create -f environment.yml
-conda activate scdlkit
-python examples/first_run_synthetic.py
+python -m pip install scdlkit
 ```
 
-This is the smallest end-to-end example and writes artifacts to `artifacts/first_run/`.
-
-If you prefer a notebook, use:
+Install the notebook extra if you want to execute the beginner notebook:
 
 ```bash
-jupyter notebook examples/first_run_synthetic.ipynb
+python -m pip install "scdlkit[notebook]"
 ```
 
-The default Conda environment includes the notebook dependencies for this walkthrough.
+Install the Scanpy extra if you want the PBMC notebooks:
 
-If you created `scdlkit` from an older environment file, recreate the environment once before using the notebook.
+```bash
+python -m pip install "scdlkit[scanpy]"
+```
 
-## Python API
+## Minimal Python API example
 
 ```python
+import numpy as np
+import pandas as pd
+from anndata import AnnData
 from scdlkit import TaskRunner
+
+X = np.random.rand(120, 32).astype("float32")
+obs = pd.DataFrame({"cell_type": ["T-cell"] * 60 + ["B-cell"] * 60})
+adata = AnnData(X=X, obs=obs)
 
 runner = TaskRunner(
     model="vae",
     task="representation",
-    latent_dim=32,
-    epochs=15,
-    batch_size=128,
+    latent_dim=8,
+    epochs=5,
+    batch_size=16,
     label_key="cell_type",
 )
 
 runner.fit(adata)
 metrics = runner.evaluate()
-runner.plot_losses()
-runner.plot_latent(method="umap", color="label")
-runner.save_report("artifacts/vae_report.md")
 ```
 
-## Lower-level workflow
+## Repo examples
 
-For more control:
-
-```python
-from scdlkit import Trainer, create_model, prepare_data
-
-prepared = prepare_data(adata, label_key="cell_type")
-model = create_model("vae", input_dim=prepared.input_dim, latent_dim=32)
-trainer = Trainer(model=model, task="representation", epochs=15)
-trainer.fit(prepared.train, prepared.val)
-```
-
-## Optional PBMC notebook extras
-
-The beginner notebook works from the default Conda environment. The PBMC notebooks still need Scanpy:
+If you cloned the repository, the smallest end-to-end example is:
 
 ```bash
-python -m pip install scanpy
+python examples/first_run_synthetic.py
+```
+
+If you want the beginner notebook after cloning the repo:
+
+```bash
+jupyter notebook examples/first_run_synthetic.ipynb
+```
+
+## Optional contributor Conda setup
+
+The repository also ships a Conda environment for contributors and demos:
+
+```bash
+conda env create -f environment.yml
+conda activate scdlkit
 ```
