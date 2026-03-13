@@ -1,16 +1,16 @@
 # Roadmap
 
-## v0.1
+## Current focus
 
-- AnnData-native preprocessing
-- core baseline models
-- training, evaluation, and visualization
-- comparison utility
-- docs site and notebooks
-- PyPI release workflow
+- Scanpy-first tutorials
+- professional scientific documentation
+- reproducible CPU/GPU-friendly examples
+- strong baseline comparison workflows
 
-## v0.2
+## Later additions
 
-- CLI and YAML configs
-- graph extensions
-- richer model comparison and experiment management
+- broader reporting and benchmark utilities
+- classification extensions
+- more advanced generative and graph-based models
+
+The main priority remains a clean baseline toolkit rather than a broad single-cell framework.

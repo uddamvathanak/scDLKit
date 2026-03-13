@@ -6,7 +6,8 @@
    - `ruff check .`
    - `mypy src`
    - `pytest`
-   - `mkdocs build --strict`
+   - `python scripts/prepare_tutorial_notebooks.py --execute published`
+   - `python -m sphinx -b html docs docs/_build/html -W --keep-going`
    - `python -m build`
    - `python -m twine check dist/*`
 2. Ensure GitHub Pages is enabled with `Source = GitHub Actions`.
@@ -25,11 +26,11 @@
      - environment: `pypi`
 5. Trigger the `release-testpypi` workflow with:
    - `ref = main`
-   - `version = 0.1.0`
+   - `version = 0.1.1`
 6. Wait for the TestPyPI publish and smoke-install jobs to pass.
 7. Create and push the final tag:
-   - `git tag v0.1.0`
-   - `git push origin v0.1.0`
+   - `git tag v0.1.1`
+   - `git push origin v0.1.1`
 8. Approve the `pypi` environment in GitHub Actions.
 9. Verify the final release:
    - `python -m pip install scdlkit`

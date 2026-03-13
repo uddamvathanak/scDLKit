@@ -1,0 +1,24 @@
+:root {
+  --pst-color-primary: #0f766e;
+  --pst-color-secondary: #0b7285;
+}
+
+.bd-main .bd-content .bd-article-container {
+  max-width: 58rem;
+}
+
+.bd-page-width {
+  max-width: 88rem;
+}
+
+.sd-card {
+  border-radius: 0.7rem;
+}
+
+.sd-card .sd-card-body {
+  font-size: 0.95rem;
+}
+
+img {
+  border-radius: 0.5rem;
+}
