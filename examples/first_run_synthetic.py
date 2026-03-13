@@ -1,4 +1,4 @@
-"""Minimal first-run example for a fresh Conda environment."""
+"""Minimal synthetic smoke example for a fresh scDLKit install."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from pathlib import Path
 import matplotlib
 import numpy as np
 import pandas as pd
+import torch
 from anndata import AnnData
 
 from scdlkit import TaskRunner
@@ -42,6 +43,8 @@ def main() -> None:
     output_dir = Path("artifacts/first_run")
     output_dir.mkdir(parents=True, exist_ok=True)
     adata = make_synthetic_adata()
+    device_name = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"Using device: {device_name}")
 
     runner = TaskRunner(
         model="autoencoder",
@@ -53,6 +56,7 @@ def main() -> None:
         lr=1e-3,
         label_key="cell_type",
         batch_key="batch",
+        device="auto",
         output_dir=str(output_dir),
     )
     runner.fit(adata)

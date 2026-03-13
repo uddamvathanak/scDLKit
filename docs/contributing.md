@@ -1,10 +1,28 @@
 # Contributing
 
-The repository-level `CONTRIBUTING.md` contains the full local setup and contribution workflow.
+Contributions should keep scDLKit focused:
 
-Before opening a PR:
+- AnnData-native
+- baseline-first
+- reproducible
+- easy to adopt for Scanpy users
 
-- run `ruff check .`
-- run `mypy src`
-- run `pytest`
-- update docs and examples if the public API changes
+## Local setup
+
+```bash
+python -m pip install -e ".[dev,docs,tutorials]"
+```
+
+## Validation
+
+Before opening a pull request, run:
+
+```bash
+ruff check .
+mypy src
+pytest
+python scripts/prepare_tutorial_notebooks.py --execute published
+python -m sphinx -b html docs docs/_build/html -W --keep-going
+```
+
+Keep notebook sources in `examples/`. The `docs/_tutorials/` copies and `docs/_build/` output are generated during validation and should not be committed.

@@ -1,0 +1,84 @@
+"""Sync and optionally execute tutorial notebooks for the docs site."""
+
+from __future__ import annotations
+
+import argparse
+import shutil
+from pathlib import Path
+
+import nbformat
+from nbconvert.preprocessors import ExecutePreprocessor
+
+ROOT = Path(__file__).resolve().parents[1]
+DOCS_DIR = ROOT / "docs"
+TUTORIAL_DIR = DOCS_DIR / "_tutorials"
+STATIC_DIR = DOCS_DIR / "_static"
+
+NOTEBOOK_MAP = {
+    "scanpy_pbmc_quickstart.ipynb": ROOT / "examples" / "train_vae_pbmc.ipynb",
+    "pbmc_model_comparison.ipynb": ROOT / "examples" / "compare_models_pbmc.ipynb",
+    "pbmc_classification.ipynb": ROOT / "examples" / "classification_demo.ipynb",
+    "synthetic_smoke.ipynb": ROOT / "examples" / "first_run_synthetic.ipynb",
+}
+
+ASSET_MAP = {
+    "first_run_loss_curve.png": ROOT
+    / "examples"
+    / "artifacts"
+    / "first_run_notebook"
+    / "loss_curve.png",
+    "first_run_latent_pca.png": ROOT
+    / "examples"
+    / "artifacts"
+    / "first_run_notebook"
+    / "latent_pca.png",
+    "pbmc_benchmark_comparison.png": ROOT
+    / "examples"
+    / "artifacts"
+    / "pbmc_compare"
+    / "benchmark_comparison.png",
+}
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--execute",
+        choices=("none", "published"),
+        default="none",
+        help="Execute synced notebooks after copying them.",
+    )
+    return parser.parse_args()
+
+
+def sync_notebooks(execute: bool) -> None:
+    TUTORIAL_DIR.mkdir(parents=True, exist_ok=True)
+    for target_name, source_path in NOTEBOOK_MAP.items():
+        if not source_path.exists():
+            msg = f"Required tutorial notebook is missing: {source_path}"
+            raise FileNotFoundError(msg)
+        notebook = nbformat.read(source_path, as_version=4)
+        target_path = TUTORIAL_DIR / target_name
+        if execute:
+            executor = ExecutePreprocessor(timeout=None, kernel_name="python3")
+            executor.preprocess(notebook, {"metadata": {"path": str(ROOT)}})
+        nbformat.write(notebook, target_path)
+
+
+def sync_assets() -> None:
+    STATIC_DIR.mkdir(parents=True, exist_ok=True)
+    for target_name, source_path in ASSET_MAP.items():
+        if not source_path.exists():
+            msg = f"Required docs asset is missing: {source_path}"
+            raise FileNotFoundError(msg)
+        shutil.copy2(source_path, STATIC_DIR / target_name)
+
+
+def main() -> None:
+    args = parse_args()
+    sync_notebooks(execute=args.execute == "published")
+    sync_assets()
+
+
+if __name__ == "__main__":
+    main()

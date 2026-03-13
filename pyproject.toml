@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scdlkit"
-version = "0.1.0"
+version = "0.1.1"
 description = "AnnData-native deep learning baselines for single-cell data."
 readme = "README.md"
 license = "MIT"
@@ -41,6 +41,10 @@ dependencies = [
 [project.optional-dependencies]
 notebook = ["jupyter>=1.0"]
 scanpy = ["scanpy>=1.10"]
+tutorials = [
+  "jupyter>=1.0",
+  "scanpy>=1.10",
+]
 dev = [
   "build>=1.2",
   "mypy>=1.9",
@@ -51,10 +55,12 @@ dev = [
 ]
 docs = [
   "jupyter>=1.0",
-  "mkdocs-material>=9.5",
-  "mkdocstrings[python]>=0.25",
-  "mkdocs-gen-files>=0.5",
-  "mkdocs-literate-nav>=0.6",
+  "myst-nb>=1.1",
+  "pydata-sphinx-theme>=0.16",
+  "sphinx>=8.0",
+  "sphinx-autodoc-typehints>=2.3",
+  "sphinx-copybutton>=0.5",
+  "sphinx-design>=0.6",
 ]
 
 [project.urls]

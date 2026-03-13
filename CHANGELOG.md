@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.1
+
+- Migrated the documentation site from MkDocs to a Sphinx-based scientific layout.
+- Added a Scanpy-first tutorial path built around PBMC notebooks rendered directly in the docs site.
+- Added the `tutorials` extra for notebook and Scanpy-driven walkthroughs.
+- Documented a shared CPU/GPU tutorial path through `device="auto"`.
+- Kept the synthetic script and notebook as lightweight smoke-test examples rather than the primary onboarding path.
+
 ## 0.1.0
 
 - First public release of `scdlkit`.

@@ -6,16 +6,17 @@
 [![Python versions](https://img.shields.io/pypi/pyversions/scdlkit?cacheSeconds=300)](https://pypi.org/project/scdlkit/)
 [![License](https://img.shields.io/pypi/l/scdlkit?cacheSeconds=300)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/uddamvathanak/scDLKit?style=social)](https://github.com/uddamvathanak/scDLKit/stargazers)
-[![Downloads](https://static.pepy.tech/badge/scdlkit)](https://pepy.tech/projects/scdlkit)
 
 Train, evaluate, compare, and visualize baseline deep-learning models for single-cell data without writing PyTorch from scratch.
 
 ## Start Here
 
 - Documentation site: https://uddamvathanak.github.io/scDLKit/
-- Beginner Jupyter notebook: `examples/first_run_synthetic.ipynb`
-- Beginner script: `examples/first_run_synthetic.py`
-- PBMC notebooks: `examples/train_vae_pbmc.ipynb`, `examples/compare_models_pbmc.ipynb`, `examples/classification_demo.ipynb`
+- Primary notebook tutorial: `examples/train_vae_pbmc.ipynb`
+- Install path for tutorials: `python -m pip install "scdlkit[tutorials]"`
+- CPU and GPU use the same notebook path through `device="auto"`
+- Secondary notebooks: `examples/compare_models_pbmc.ipynb`, `examples/classification_demo.ipynb`
+- Synthetic smoke examples: `examples/first_run_synthetic.ipynb`, `examples/first_run_synthetic.py`
 
 ## Why scDLKit
 
@@ -33,82 +34,98 @@ Train, evaluate, compare, and visualize baseline deep-learning models for single
 
 ## Installation
 
-Primary public install path:
+Primary tutorial install path:
 
 ```bash
-python -m pip install scdlkit
+python -m pip install "scdlkit[tutorials]"
 ```
+
+Windows note: if you install into a deeply nested virtual environment path, Jupyter dependencies can hit Windows path-length limits. Use a short environment path such as `C:\venvs\scdlkit`, or enable Windows Long Paths if needed.
 
 Optional extras:
 
 ```bash
 python -m pip install "scdlkit[scanpy]"
 python -m pip install "scdlkit[notebook]"
+python -m pip install scdlkit
 python -m pip install "scdlkit[dev,docs]"
 ```
 
-## Quickstart
+For GPU users, install the matching PyTorch build first using the official selector:
 
-Smallest package-level run:
+- https://docs.pytorch.org/get-started/locally/
+
+Then install `scdlkit[tutorials]`. The same notebook examples run on CPU or GPU with `device="auto"`.
+
+## Scanpy Quickstart
+
+Primary tutorial example:
 
 ```python
-import numpy as np
-import pandas as pd
-from anndata import AnnData
+import scanpy as sc
 from scdlkit import TaskRunner
 
-X = np.random.rand(120, 32).astype("float32")
-obs = pd.DataFrame({"cell_type": ["T-cell"] * 60 + ["B-cell"] * 60})
-adata = AnnData(X=X, obs=obs)
+adata = sc.datasets.pbmc3k_processed()
 
 runner = TaskRunner(
     model="vae",
     task="representation",
-    latent_dim=8,
-    epochs=5,
-    batch_size=16,
-    label_key="cell_type",
+    label_key="louvain",
+    device="auto",
+    epochs=10,
+    batch_size=128,
 )
 
 runner.fit(adata)
-metrics = runner.evaluate()
-runner.plot_losses()
+adata.obsm["X_scdlkit_vae"] = runner.encode(adata)
+```
+
+Then continue with Scanpy:
+
+```python
+import scanpy as sc
+
+sc.pp.neighbors(adata, use_rep="X_scdlkit_vae")
+sc.tl.umap(adata)
+sc.pl.umap(adata, color="louvain")
 ```
 
 ## Notebook-First Examples
 
-Most researchers will want to start with the beginner notebook:
+Most researchers should start with the Scanpy PBMC quickstart:
+
+```bash
+python -m pip install "scdlkit[tutorials]"
+jupyter notebook examples/train_vae_pbmc.ipynb
+```
+
+This notebook:
+
+- loads PBMC data through Scanpy
+- trains a VAE baseline with scDLKit
+- writes the latent representation into `adata.obsm`
+- continues with Scanpy neighbors and UMAP
+- works on CPU or GPU through `device="auto"`
+
+Additional Scanpy-first notebooks:
+
+- `examples/compare_models_pbmc.ipynb`: compare `autoencoder`, `vae`, and `transformer_ae`
+- `examples/classification_demo.ipynb`: run the `mlp_classifier` baseline and inspect a confusion matrix
+
+The synthetic notebook and script are still available, but they are now the smoke-test path rather than the primary researcher onboarding flow:
 
 ```bash
 python -m pip install "scdlkit[notebook]"
 jupyter notebook examples/first_run_synthetic.ipynb
-```
 
-This notebook creates a small synthetic `AnnData`, trains a baseline model with `TaskRunner`, evaluates it, and writes plots and reports to `artifacts/first_run_notebook/`.
-
-If you prefer a script-based run:
-
-```bash
 python examples/first_run_synthetic.py
 ```
 
-This writes a report, checkpoint, loss curve, and latent PCA plot to `artifacts/first_run/`.
-
-Additional notebook workflows:
-
-- `examples/train_vae_pbmc.ipynb`: first PBMC VAE walkthrough
-- `examples/compare_models_pbmc.ipynb`: baseline comparison on PBMC data
-- `examples/classification_demo.ipynb`: supervised classification example
-
-The heavier PBMC notebooks still need Scanpy:
-
-```bash
-python -m pip install "scdlkit[scanpy]"
-```
+These write small reproducible artifacts to `artifacts/first_run_notebook/` and `artifacts/first_run/`.
 
 ## Optional contributor Conda environment
 
-Conda is kept for contributors and demos. It is not the primary public install path for `v0.1.0`.
+Conda is kept for contributors and demos. It is not the primary public install path for `v0.1.1`.
 
 Official installers:
 
@@ -166,10 +183,11 @@ benchmark = compare_models(
 
 ## Documentation
 
-Project documentation is configured for GitHub Pages with MkDocs Material:
+Project documentation is published as a Sphinx-based scientific docs site:
 
 - Docs site: https://uddamvathanak.github.io/scDLKit/
-- API reference: `docs/api.md`
+- Tutorials: Scanpy-first notebook walkthroughs rendered in the docs site
+- API reference: `docs/api/index.md`
 - Example notebooks: `examples/`
 
 ### GitHub Pages setup
@@ -201,11 +219,11 @@ If you want the workflow to bootstrap Pages automatically instead of doing the o
 
 ## Examples
 
-- `examples/first_run_synthetic.ipynb` is the easiest notebook walkthrough.
-- `examples/first_run_synthetic.py` is the easiest script walkthrough.
-- `examples/train_vae_pbmc.ipynb`
-- `examples/compare_models_pbmc.ipynb`
-- `examples/classification_demo.ipynb`
+- `examples/train_vae_pbmc.ipynb` is the primary Scanpy-first notebook tutorial.
+- `examples/compare_models_pbmc.ipynb` compares `autoencoder`, `vae`, and `transformer_ae` on PBMC data.
+- `examples/classification_demo.ipynb` covers the `mlp_classifier` workflow and confusion-matrix reporting.
+- `examples/first_run_synthetic.ipynb` is the secondary smoke-test notebook with minimal setup.
+- `examples/first_run_synthetic.py` is the secondary smoke-test script.
 
 ## Roadmap
 

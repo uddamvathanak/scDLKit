@@ -6,6 +6,8 @@ AGENTS.md
 build/
 dist/
 site/
+docs/_build/
+docs/_tutorials/
 artifacts/
 data/
 examples/data/

@@ -50,7 +50,7 @@ jobs:
       - name: Install package and notebook tooling
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e .[dev,docs]
+          python -m pip install -e .[dev,tutorials]
       - name: Pytest
         run: pytest
       - name: Public API smoke test
@@ -66,4 +66,32 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: smoke-${{ matrix.os }}
+          path: artifacts
+
+  linux-tutorial-smoke:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Install package and tutorial dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[dev,tutorials]
+      - name: Prepare notebook artifact directory
+        run: python -c "from pathlib import Path; Path('artifacts/notebooks').mkdir(parents=True, exist_ok=True)"
+      - name: Execute Scanpy PBMC quickstart notebook
+        run: python -m jupyter nbconvert --to notebook --execute examples/train_vae_pbmc.ipynb --output scanpy_pbmc_quickstart.ci.executed.ipynb --output-dir artifacts/notebooks --ExecutePreprocessor.timeout=0
+      - name: Execute PBMC comparison notebook
+        run: python -m jupyter nbconvert --to notebook --execute examples/compare_models_pbmc.ipynb --output pbmc_model_comparison.ci.executed.ipynb --output-dir artifacts/notebooks --ExecutePreprocessor.timeout=0
+      - name: Execute PBMC classification notebook
+        run: python -m jupyter nbconvert --to notebook --execute examples/classification_demo.ipynb --output pbmc_classification.ci.executed.ipynb --output-dir artifacts/notebooks --ExecutePreprocessor.timeout=0
+      - name: Upload tutorial artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tutorial-smoke-ubuntu
           path: artifacts
