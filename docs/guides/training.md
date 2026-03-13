@@ -26,6 +26,9 @@ runner = TaskRunner(
 
 If CUDA is available, training will use it. If not, the same notebook continues on CPU.
 
+For single-cell VAE tutorials, it is often worth reducing `kl_weight` from the
+vanilla setting so the latent space does not over-regularize.
+
 ## Lower-level training
 
 ```python

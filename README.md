@@ -5,6 +5,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/scdlkit?cacheSeconds=300)](https://pypi.org/project/scdlkit/)
 [![Python versions](https://img.shields.io/pypi/pyversions/scdlkit?cacheSeconds=300)](https://pypi.org/project/scdlkit/)
 [![License](https://img.shields.io/pypi/l/scdlkit?cacheSeconds=300)](LICENSE)
+[![GitHub downloads](https://img.shields.io/github/downloads/uddamvathanak/scDLKit/total)](https://github.com/uddamvathanak/scDLKit/releases)
 [![GitHub stars](https://img.shields.io/github/stars/uddamvathanak/scDLKit?style=social)](https://github.com/uddamvathanak/scDLKit/stargazers)
 
 Train, evaluate, compare, and visualize baseline deep-learning models for single-cell data without writing PyTorch from scratch.
@@ -74,11 +75,15 @@ runner = TaskRunner(
     device="auto",
     epochs=10,
     batch_size=128,
+    model_kwargs={"kl_weight": 1e-3},
 )
 
 runner.fit(adata)
 adata.obsm["X_scdlkit_vae"] = runner.encode(adata)
 ```
+
+For the PBMC quickstart, use a light VAE KL term so the latent UMAP preserves broad
+cell-type structure instead of collapsing into a uniform blob.
 
 Then continue with Scanpy:
 
