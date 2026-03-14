@@ -16,6 +16,8 @@ That installs:
 - `jupyter`
 - the core scDLKit package
 
+The public tutorials default to a `quickstart` profile. Each notebook also includes a `full` profile for longer, more convincing qualitative runs without changing the overall workflow.
+
 ## CPU and GPU
 
 scDLKit uses the same tutorial code on CPU and GPU. The notebooks and scripts should default to `device="auto"`, so the package will use CUDA when available and fall back to CPU otherwise.
@@ -61,3 +63,5 @@ Most users should open the Scanpy-first quickstart notebook:
 ```bash
 jupyter notebook examples/train_vae_pbmc.ipynb
 ```
+
+Then keep the same notebook and the same `device="auto"` setting for CPU or GPU. If you want a longer run, change the first config cell from `TUTORIAL_PROFILE = "quickstart"` to `TUTORIAL_PROFILE = "full"`.

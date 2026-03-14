@@ -25,7 +25,7 @@ Train, evaluate, compare, and visualize baseline deep-learning models for single
 - Baseline-first model zoo: AE, VAE, DAE, Transformer AE, and MLP classification.
 - Built-in training, evaluation, comparison, and plotting.
 - Reproducible reports and notebooks for portfolio-ready demonstrations.
-- Extensible registry-based architecture for custom models and future tasks.
+- Gene-expression-focused scope while the core toolkit stabilizes.
 
 ## Supported platforms
 
@@ -60,7 +60,10 @@ Then install `scdlkit[tutorials]`. The same notebook examples run on CPU or GPU 
 
 ## Scanpy Quickstart
 
-Primary tutorial example:
+Primary tutorial example. The notebook now uses a quickstart profile by default and exposes a full profile in its first config cell:
+
+- `quickstart`: CPU-friendly, docs-friendly, reproducible
+- `full`: longer run for stronger qualitative separation
 
 ```python
 import scanpy as sc
@@ -73,7 +76,7 @@ runner = TaskRunner(
     task="representation",
     label_key="louvain",
     device="auto",
-    epochs=10,
+    epochs=20,
     batch_size=128,
     model_kwargs={"kl_weight": 1e-3},
 )
@@ -83,7 +86,8 @@ adata.obsm["X_scdlkit_vae"] = runner.encode(adata)
 ```
 
 For the PBMC quickstart, use a light VAE KL term so the latent UMAP preserves broad
-cell-type structure instead of collapsing into a uniform blob.
+cell-type structure instead of collapsing into a uniform blob. A healthy result should
+show broad cell-type groups as visibly separated regions rather than a single mixed cloud.
 
 Then continue with Scanpy:
 
@@ -110,11 +114,12 @@ This notebook:
 - trains a VAE baseline with scDLKit
 - writes the latent representation into `adata.obsm`
 - continues with Scanpy neighbors and UMAP
+- explains the quickstart versus full tutorial profiles
 - works on CPU or GPU through `device="auto"`
 
 Additional Scanpy-first notebooks:
 
-- `examples/compare_models_pbmc.ipynb`: compare `autoencoder`, `vae`, and `transformer_ae`
+- `examples/compare_models_pbmc.ipynb`: compare `PCA`, `autoencoder`, `vae`, and `transformer_ae`
 - `examples/classification_demo.ipynb`: run the `mlp_classifier` baseline and inspect a confusion matrix
 
 The synthetic notebook and script are still available, but they are now the smoke-test path rather than the primary researcher onboarding flow:
@@ -130,7 +135,7 @@ These write small reproducible artifacts to `artifacts/first_run_notebook/` and 
 
 ## Optional contributor Conda environment
 
-Conda is kept for contributors and demos. It is not the primary public install path for `v0.1.1`.
+Conda is kept for contributors and demos. It is not the primary public install path.
 
 Official installers:
 
@@ -186,6 +191,14 @@ benchmark = compare_models(
 - `reconstruction`
 - `classification`
 
+## Current scope
+
+- Gene-expression baselines for AnnData workflows
+- Scanpy-first tutorial and downstream embedding usage
+- Built-in deep-learning baselines plus classical comparison context in notebooks
+
+Spatial omics, multimodal workflows, and custom PyTorch model adapters are future work once the gene-expression toolkit quality gates stay stable.
+
 ## Documentation
 
 Project documentation is published as a Sphinx-based scientific docs site:
@@ -232,17 +245,26 @@ If you want the workflow to bootstrap Pages automatically instead of doing the o
 
 ## Roadmap
 
+Immediate roadmap target:
+
+- quality-only hardening toward the next patch release
+- longer notebook tutorials with quickstart and full profiles
+- explicit toolkit-quality benchmarking on small Scanpy built-ins
+- internal release gates for latent quality, classification quality, and seed stability
+
+Released so far:
+
 `v0.1`
 
 - Expanded core workflow with training, evaluation, reporting, and plotting.
 - Staged TestPyPI and PyPI publishing.
 - Cross-platform smoke validation and reproducible notebooks.
 
-`v0.2`
+Later:
 
-- CLI and YAML config support.
-- Graph-based models and richer benchmarking helpers.
-- More task-specific extensions.
+- adapter-based custom PyTorch model support
+- deeper downstream tutorials
+- spatial baselines only after the gene-expression toolkit is stable
 
 ## Citation
 

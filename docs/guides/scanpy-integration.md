@@ -28,7 +28,7 @@ runner = TaskRunner(
     task="representation",
     label_key="louvain",
     device="auto",
-    epochs=10,
+    epochs=20,
     batch_size=128,
     model_kwargs={"kl_weight": 1e-3},
 )
@@ -38,7 +38,9 @@ adata.obsm["X_scdlkit_vae"] = runner.encode(adata)
 ```
 
 For this single-cell baseline, use a light VAE KL term so PBMC populations remain
-visibly separable in the latent UMAP.
+visibly separable in the latent UMAP. The quickstart notebook exposes both a
+`quickstart` and a `full` profile; the latter simply runs longer with the same
+code path when you want a stronger qualitative result.
 
 ## Continue with Scanpy
 
@@ -59,3 +61,5 @@ It is the model-training and evaluation layer you can drop into a standard singl
 - a baseline autoencoder or VAE
 - a quick benchmark before building a custom method
 - a consistent way to compare latent representations
+
+Today that scope is still gene-expression-first. Spatial and multimodal workflows are intentionally deferred until the current baseline toolkit is better benchmarked.
