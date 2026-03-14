@@ -43,6 +43,7 @@ See how to store scDLKit latent embeddings in `adata.obsm` and continue with sta
 - one shared CPU/GPU path with `device="auto"`
 - reproducible reports, plots, and tutorial notebooks
 - clean separation between model workflows and Scanpy analysis
+- release hardening driven by built-in benchmark gates before defaults change
 - gene-expression scope first, while defaults and tutorials are still being hardened
 
 ## Example outputs

@@ -36,3 +36,7 @@ When `output_dir` is set, comparison can write:
 For CPU-oriented notebook runs, the comparison tutorial uses a compact Transformer AE setting with `patch_size=48`, `d_model=64`, `n_heads=2`, and `n_layers=1`.
 
 This makes it easy to include baseline evidence in research notes or portfolio material.
+
+The same comparison structure also feeds the internal release hardening work:
+small built-in Scanpy datasets, a `PCA` reference, and explicit runtime tracking
+before tutorial defaults are changed.

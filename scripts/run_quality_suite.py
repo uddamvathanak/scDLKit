@@ -1,4 +1,4 @@
-"""Internal quality suite for benchmark and tutorial regression checks."""
+"""Internal quality suite for benchmark and tutorial release-gate checks."""
 
 from __future__ import annotations
 
@@ -37,48 +37,75 @@ QUALITY_GATES: dict[str, float] = {
     "pbmc_classifier_macro_f1_min": 0.80,
 }
 
-PROFILE_DEFAULTS: dict[str, dict[str, Any]] = {
+RUNTIME_BUDGETS: dict[str, dict[str, float]] = {
+    "ci": {
+        "quality_suite_total_sec": 300.0,
+        "tutorial_total_sec": 480.0,
+        "transformer_ae_warn_sec": 15.0,
+        "transformer_ae_fail_sec": 25.0,
+    },
+    "full": {
+        "quality_suite_total_sec": 1200.0,
+        "tutorial_total_sec": 1200.0,
+        "transformer_ae_warn_sec": 30.0,
+        "transformer_ae_fail_sec": 60.0,
+    },
+}
+
+PROFILE_DEFAULTS: dict[str, dict[str, dict[str, dict[str, tuple[int, ...]]]]] = {
     "ci": {
         "representation": {
             "pbmc3k_processed": {
-                "models": ("pca", "autoencoder", "vae", "transformer_ae"),
-                "seeds": (42, 52, 62),
+                "pca": (42,),
+                "autoencoder": (42,),
+                "vae": (42, 52, 62),
+                "transformer_ae": (42,),
             },
             "paul15": {
-                "models": ("pca", "vae"),
-                "seeds": (42,),
+                "pca": (42,),
+                "vae": (42,),
             },
         },
         "classification": {
             "pbmc3k_processed": {
-                "models": ("mlp_classifier", "logistic_regression_pca"),
-                "seeds": (42,),
+                "mlp_classifier": (42,),
+                "logistic_regression_pca": (42,),
             },
         },
     },
     "full": {
         "representation": {
             "pbmc3k_processed": {
-                "models": ("pca", "autoencoder", "vae", "transformer_ae"),
-                "seeds": (42, 52, 62),
+                "pca": (42, 52, 62),
+                "autoencoder": (42, 52, 62),
+                "vae": (42, 52, 62),
+                "transformer_ae": (42, 52, 62),
             },
             "paul15": {
-                "models": ("pca", "autoencoder", "vae", "transformer_ae"),
-                "seeds": (42, 52, 62),
+                "pca": (42, 52, 62),
+                "autoencoder": (42, 52, 62),
+                "vae": (42, 52, 62),
             },
             "moignard15": {
-                "models": ("pca", "autoencoder", "vae"),
-                "seeds": (42,),
+                "pca": (42,),
+                "vae": (42,),
             },
         },
         "classification": {
             "pbmc3k_processed": {
-                "models": ("mlp_classifier", "logistic_regression_pca"),
-                "seeds": (42,),
+                "mlp_classifier": (42, 52, 62),
+                "logistic_regression_pca": (42, 52, 62),
             },
         },
     },
 }
+
+REQUIRED_TUTORIAL_NAMES = (
+    "scanpy_pbmc_quickstart",
+    "pbmc_model_comparison",
+    "pbmc_classification",
+    "synthetic_smoke",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,9 +145,20 @@ def parse_args() -> argparse.Namespace:
         help="Optional output directory. Defaults to a dated folder under artifacts/quality/.",
     )
     parser.add_argument(
+        "--tutorial-summary",
+        type=Path,
+        default=None,
+        help="Optional tutorial validation summary JSON for RC readiness checks.",
+    )
+    parser.add_argument(
         "--check",
         action="store_true",
-        help="Fail with a non-zero exit code when quality gates fail.",
+        help="Fail with a non-zero exit code when benchmark gates fail.",
+    )
+    parser.add_argument(
+        "--require-rc",
+        action="store_true",
+        help="Require full release-candidate readiness, including tutorial checks.",
     )
     return parser.parse_args()
 
@@ -188,6 +226,16 @@ def _save_scanpy_umap(
 def _encode_obs(values: pd.Series) -> tuple[np.ndarray, list[str]]:
     encoded = pd.Categorical(values.astype(str))
     return encoded.codes.astype(int), list(encoded.categories)
+
+
+def _iter_profile_runs(profile: str) -> list[tuple[str, str, str, int]]:
+    runs: list[tuple[str, str, str, int]] = []
+    profile_config = PROFILE_DEFAULTS[profile]
+    for task, datasets in profile_config.items():
+        for dataset_name, model_seeds in datasets.items():
+            for model_name, seeds in model_seeds.items():
+                runs.extend((dataset_name, task, model_name, seed) for seed in seeds)
+    return runs
 
 
 def _runner_kwargs(model_name: str, profile: str) -> dict[str, Any]:
@@ -435,6 +483,7 @@ def run_logistic_regression_pca(
         f"- `{key}`: `{value:.4f}`" for key, value in metrics.items() if isinstance(value, float)
     )
     (output_dir / "report.md").write_text("\n".join(report_lines) + "\n", encoding="utf-8")
+    pd.DataFrame([metrics]).to_csv(output_dir / "report.csv", index=False)
     scalar_metrics = {
         key: value for key, value in metrics.items() if isinstance(value, (int, float))
     }
@@ -468,6 +517,100 @@ def aggregate_metrics(metrics_frame: pd.DataFrame) -> pd.DataFrame:
         for column in aggregated.columns.to_flat_index()
     ]
     return aggregated
+
+
+def _required_benchmark_artifacts(task: str, model: str) -> tuple[str, ...]:
+    if task == "representation" and model == "pca":
+        return ("report.md", "report.csv", "latent_umap.png")
+    if task == "representation":
+        return ("report.md", "report.csv", "loss_curve.png", "latent_umap.png")
+    if model == "mlp_classifier":
+        return ("report.md", "report.csv", "loss_curve.png", "confusion_matrix.png")
+    return ("report.md", "report.csv", "confusion_matrix.png")
+
+
+def _find_missing_runs(metrics_frame: pd.DataFrame, profile: str) -> list[str]:
+    present = {
+        (str(row.dataset), str(row.task), str(row.model), int(row.seed))
+        for row in metrics_frame.itertuples()
+    }
+    missing: list[str] = []
+    for dataset_name, task, model_name, seed in _iter_profile_runs(profile):
+        run_spec = (dataset_name, task, model_name, seed)
+        if run_spec not in present:
+            missing.append(f"{dataset_name}/{task}/{model_name}/seed_{seed}")
+    return missing
+
+
+def _collect_benchmark_artifact_checks(metrics_frame: pd.DataFrame) -> dict[str, Any]:
+    missing_files: list[str] = []
+    checked_files = 0
+    for row in metrics_frame.itertuples():
+        artifact_dir = Path(str(row.artifact_dir))
+        for filename in _required_benchmark_artifacts(str(row.task), str(row.model)):
+            checked_files += 1
+            if not (artifact_dir / filename).exists():
+                missing_files.append(str(artifact_dir / filename))
+    return {
+        "passed": not missing_files,
+        "checked_files": checked_files,
+        "missing_files": missing_files,
+    }
+
+
+def _normalize_tutorial_summary(tutorial_summary: dict[str, Any] | None) -> dict[str, Any]:
+    if tutorial_summary is None:
+        return {
+            "validated": False,
+            "passed": False,
+            "issues": ["Tutorial summary not provided."],
+            "runtime": {
+                "total_sec": None,
+                "budget_sec": None,
+                "passed": False,
+                "notebook_count": 0,
+            },
+            "artifact_checks": {
+                "passed": False,
+                "missing_files": [],
+            },
+            "missing_notebooks": list(REQUIRED_TUTORIAL_NAMES),
+        }
+    runtime = tutorial_summary.get("runtime", {})
+    artifact_checks = tutorial_summary.get("artifact_checks", {})
+    notebook_names = {
+        str(notebook.get("name"))
+        for notebook in tutorial_summary.get("notebooks", [])
+        if notebook.get("name")
+    }
+    missing_notebooks = [
+        notebook_name
+        for notebook_name in REQUIRED_TUTORIAL_NAMES
+        if notebook_name not in notebook_names
+    ]
+    issues = list(tutorial_summary.get("issues", []))
+    if missing_notebooks:
+        issues.extend(
+            f"Missing tutorial summary entry for notebook '{notebook_name}'."
+            for notebook_name in missing_notebooks
+        )
+    passed = bool(tutorial_summary.get("passed", False)) and not missing_notebooks
+    return {
+        "validated": True,
+        "passed": passed,
+        "issues": issues,
+        "runtime": {
+            "total_sec": runtime.get("total_sec"),
+            "budget_sec": runtime.get("budget_sec"),
+            "passed": bool(runtime.get("passed", False)),
+            "notebook_count": int(runtime.get("notebook_count", len(notebook_names))),
+        },
+        "artifact_checks": {
+            "passed": bool(artifact_checks.get("passed", False)),
+            "missing_files": list(artifact_checks.get("missing_files", [])),
+        },
+        "missing_notebooks": missing_notebooks,
+    }
 
 
 def evaluate_quality_gates(metrics_frame: pd.DataFrame) -> list[str]:
@@ -534,31 +677,158 @@ def evaluate_quality_gates(metrics_frame: pd.DataFrame) -> list[str]:
     return issues
 
 
-def build_summary(metrics_frame: pd.DataFrame, *, profile: str) -> dict[str, Any]:
+def _evaluate_runtime(
+    metrics_frame: pd.DataFrame,
+    *,
+    profile: str,
+    suite_runtime_sec: float,
+    tutorial_checks: dict[str, Any],
+) -> dict[str, Any]:
+    budgets = RUNTIME_BUDGETS[profile]
+    benchmark_issues: list[str] = []
+    tutorial_issues: list[str] = []
+    warnings: list[str] = []
+    suite_passed = suite_runtime_sec <= budgets["quality_suite_total_sec"]
+    if not suite_passed:
+        benchmark_issues.append(
+            "Quality-suite runtime exceeded "
+            f"{budgets['quality_suite_total_sec']:.0f}s "
+            f"(observed {suite_runtime_sec:.1f}s)."
+        )
+
+    transformer_rows = metrics_frame[
+        (metrics_frame["dataset"] == "pbmc3k_processed")
+        & (metrics_frame["task"] == "representation")
+        & (metrics_frame["model"] == "transformer_ae")
+    ]
+    transformer_mean = (
+        float(transformer_rows["runtime_sec"].mean()) if not transformer_rows.empty else None
+    )
+    if transformer_mean is not None:
+        if transformer_mean > budgets["transformer_ae_fail_sec"]:
+            benchmark_issues.append(
+                "PBMC Transformer AE runtime exceeded the hard threshold "
+                f"of {budgets['transformer_ae_fail_sec']:.0f}s "
+                f"(observed {transformer_mean:.1f}s)."
+            )
+        elif transformer_mean > budgets["transformer_ae_warn_sec"]:
+            warnings.append(
+                "PBMC Transformer AE runtime exceeded the warning threshold "
+                f"of {budgets['transformer_ae_warn_sec']:.0f}s "
+                f"(observed {transformer_mean:.1f}s)."
+            )
+
+    tutorial_runtime = tutorial_checks["runtime"]["total_sec"]
+    tutorial_budget = tutorial_checks["runtime"]["budget_sec"]
+    tutorial_passed = bool(tutorial_checks["runtime"]["passed"])
+    if tutorial_checks["validated"] and not tutorial_passed:
+        tutorial_issues.append(
+            "Tutorial suite runtime exceeded the configured budget "
+            f"(observed {tutorial_runtime:.1f}s, budget {tutorial_budget:.0f}s)."
+        )
+
+    per_model_means = (
+        metrics_frame.groupby(["dataset", "task", "model"])["runtime_sec"]
+        .mean()
+        .reset_index()
+        .rename(columns={"runtime_sec": "runtime_sec_mean"})
+        .to_dict(orient="records")
+    )
+    return {
+        "quality_suite": {
+            "total_sec": suite_runtime_sec,
+            "budget_sec": budgets["quality_suite_total_sec"],
+            "passed": suite_passed,
+        },
+        "tutorials": {
+            "validated": tutorial_checks["validated"],
+            "total_sec": tutorial_runtime,
+            "budget_sec": tutorial_budget,
+            "passed": tutorial_passed,
+        },
+        "transformer_ae": {
+            "mean_runtime_sec": transformer_mean,
+            "warn_sec": budgets["transformer_ae_warn_sec"],
+            "fail_sec": budgets["transformer_ae_fail_sec"],
+        },
+        "per_model_means": per_model_means,
+        "warnings": warnings,
+        "benchmark_issues": benchmark_issues,
+        "tutorial_issues": tutorial_issues,
+        "issues": [*benchmark_issues, *tutorial_issues],
+    }
+
+
+def build_summary(
+    metrics_frame: pd.DataFrame,
+    *,
+    profile: str,
+    suite_runtime_sec: float | None = None,
+    tutorial_summary: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    suite_runtime = (
+        float(metrics_frame["runtime_sec"].sum())
+        if suite_runtime_sec is None
+        else suite_runtime_sec
+    )
     aggregated = aggregate_metrics(metrics_frame)
-    issues = evaluate_quality_gates(metrics_frame)
+    gate_issues = evaluate_quality_gates(metrics_frame)
+    missing_runs = _find_missing_runs(metrics_frame, profile)
+    benchmark_artifact_checks = _collect_benchmark_artifact_checks(metrics_frame)
+    tutorial_checks = _normalize_tutorial_summary(tutorial_summary)
+    runtime = _evaluate_runtime(
+        metrics_frame,
+        profile=profile,
+        suite_runtime_sec=suite_runtime,
+        tutorial_checks=tutorial_checks,
+    )
+    benchmark_ready = (
+        not gate_issues
+        and not missing_runs
+        and benchmark_artifact_checks["passed"]
+        and not runtime["benchmark_issues"]
+    )
+    release_rc_ready = (
+        benchmark_ready
+        and tutorial_checks["validated"]
+        and tutorial_checks["passed"]
+        and tutorial_checks["artifact_checks"]["passed"]
+        and not tutorial_checks["missing_notebooks"]
+    )
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "profile": profile,
         "num_runs": int(len(metrics_frame)),
         "gates": {
-            "passed": not issues,
-            "issues": issues,
+            "passed": not gate_issues,
+            "issues": gate_issues,
             "thresholds": QUALITY_GATES,
         },
+        "runtime": runtime,
+        "artifact_checks": {
+            "benchmark": benchmark_artifact_checks,
+            "tutorials": tutorial_checks,
+        },
+        "missing_runs": missing_runs,
+        "benchmark_ready": benchmark_ready,
+        "release_rc_ready": release_rc_ready,
         "aggregates": aggregated.to_dict(orient="records"),
     }
 
 
 def render_summary_markdown(summary: dict[str, Any]) -> str:
     gates = summary["gates"]
+    runtime = summary["runtime"]
+    benchmark_artifacts = summary["artifact_checks"]["benchmark"]
+    tutorial_checks = summary["artifact_checks"]["tutorials"]
     lines = [
         "# scDLKit quality-suite summary",
         "",
         f"- Profile: `{summary['profile']}`",
         f"- Generated at: `{summary['generated_at']}`",
         f"- Total runs: `{summary['num_runs']}`",
-        f"- Gates passed: `{gates['passed']}`",
+        f"- Benchmark ready: `{summary['benchmark_ready']}`",
+        f"- Release RC ready: `{summary['release_rc_ready']}`",
         "",
         "## Quality gates",
         "",
@@ -566,7 +836,82 @@ def render_summary_markdown(summary: dict[str, Any]) -> str:
     if gates["issues"]:
         lines.extend(f"- {issue}" for issue in gates["issues"])
     else:
-        lines.append("- All configured quality gates passed.")
+        lines.append("- All configured scientific quality gates passed.")
+
+    lines.extend(["", "## Missing runs", ""])
+    if summary["missing_runs"]:
+        lines.extend(f"- `{missing}`" for missing in summary["missing_runs"])
+    else:
+        lines.append("- All required dataset/task/model/seed runs are present.")
+
+    lines.extend(
+        [
+            "",
+            "## Runtime",
+            "",
+            "- Quality suite: "
+            f"`{runtime['quality_suite']['total_sec']:.1f}s` / "
+            f"`{runtime['quality_suite']['budget_sec']:.0f}s` "
+            f"(passed: `{runtime['quality_suite']['passed']}`)",
+        ]
+    )
+    if runtime["tutorials"]["validated"]:
+        lines.append(
+            "- Tutorials: "
+            f"`{runtime['tutorials']['total_sec']:.1f}s` / "
+            f"`{runtime['tutorials']['budget_sec']:.0f}s` "
+            f"(passed: `{runtime['tutorials']['passed']}`)"
+        )
+    else:
+        lines.append("- Tutorials: not validated in this summary.")
+    if runtime["transformer_ae"]["mean_runtime_sec"] is not None:
+        lines.append(
+            "- PBMC Transformer AE mean runtime: "
+            f"`{runtime['transformer_ae']['mean_runtime_sec']:.1f}s` "
+            f"(warn: `{runtime['transformer_ae']['warn_sec']:.0f}s`, "
+            f"fail: `{runtime['transformer_ae']['fail_sec']:.0f}s`)"
+        )
+    if runtime["warnings"]:
+        lines.extend(["", "### Runtime warnings", ""])
+        lines.extend(f"- {warning}" for warning in runtime["warnings"])
+    if runtime["issues"]:
+        lines.extend(["", "### Runtime issues", ""])
+        lines.extend(f"- {issue}" for issue in runtime["issues"])
+
+    lines.extend(
+        [
+            "",
+            "## Artifact checks",
+            "",
+            "- Benchmark artifacts passed: "
+            f"`{benchmark_artifacts['passed']}` "
+            f"({benchmark_artifacts['checked_files']} files checked)",
+        ]
+    )
+    if benchmark_artifacts["missing_files"]:
+        lines.extend(
+            f"- Missing benchmark artifact: `{path}`"
+            for path in benchmark_artifacts["missing_files"]
+        )
+    lines.append(f"- Tutorial artifacts validated: `{tutorial_checks['validated']}`")
+    if tutorial_checks["validated"]:
+        lines.append(
+            "- Tutorial artifacts passed: "
+            f"`{tutorial_checks['artifact_checks']['passed']}`"
+        )
+        if tutorial_checks["missing_notebooks"]:
+            lines.extend(
+                f"- Missing tutorial summary entry: `{name}`"
+                for name in tutorial_checks["missing_notebooks"]
+            )
+        if tutorial_checks["artifact_checks"]["missing_files"]:
+            lines.extend(
+                f"- Missing tutorial artifact: `{path}`"
+                for path in tutorial_checks["artifact_checks"]["missing_files"]
+            )
+        if tutorial_checks["issues"]:
+            lines.extend(f"- Tutorial issue: {issue}" for issue in tutorial_checks["issues"])
+
     lines.extend(
         [
             "",
@@ -594,6 +939,7 @@ def render_summary_markdown(summary: dict[str, Any]) -> str:
             f"{row['dataset']} | {row['task']} | {row['model']} | "
             f"{', '.join(key_means) or 'n/a'} |"
         )
+
     lines.extend(
         [
             "",
@@ -601,10 +947,9 @@ def render_summary_markdown(summary: dict[str, Any]) -> str:
             "",
             "- `pbmc3k_processed` is the primary release-quality representation benchmark.",
             "- `paul15` is the secondary built-in benchmark for checking dataset sensitivity.",
+            "- `PCA` is the classical reference baseline for asking whether deep learning helps.",
             "- `transformer_ae` uses a compact CPU-friendly configuration in the quality suite: "
             "`patch_size=48`, `d_model=64`, `n_heads=2`, `n_layers=1`.",
-            "- `logistic_regression_pca` is a classical reference baseline, not part of the "
-            "public scDLKit model zoo.",
         ]
     )
     return "\n".join(lines) + "\n"
@@ -635,15 +980,20 @@ def _save_comparison_plot(metrics_frame: pd.DataFrame, output_dir: Path) -> None
     plt.close(comparison_fig)
 
 
+def _write_summary_files(output_dir: Path, summary: dict[str, Any]) -> None:
+    (output_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    (output_dir / "summary.md").write_text(render_summary_markdown(summary), encoding="utf-8")
+
+
 def run_quality_suite(*, profile: str, output_dir: Path) -> pd.DataFrame:
     output_dir.mkdir(parents=True, exist_ok=True)
     records: list[dict[str, Any]] = []
     profile_config = PROFILE_DEFAULTS[profile]
 
-    for dataset_name, dataset_config in profile_config["representation"].items():
+    for dataset_name, model_seeds in profile_config["representation"].items():
         adata, spec = _load_dataset(dataset_name)
-        for model_name in dataset_config["models"]:
-            for seed in dataset_config["seeds"]:
+        for model_name, seeds in model_seeds.items():
+            for seed in seeds:
                 if model_name == "pca":
                     records.append(
                         run_pca_baseline(
@@ -669,10 +1019,10 @@ def run_quality_suite(*, profile: str, output_dir: Path) -> pd.DataFrame:
                         )
                     )
 
-    for dataset_name, dataset_config in profile_config["classification"].items():
+    for dataset_name, model_seeds in profile_config["classification"].items():
         adata, spec = _load_dataset(dataset_name)
-        for model_name in dataset_config["models"]:
-            for seed in dataset_config["seeds"]:
+        for model_name, seeds in model_seeds.items():
+            for seed in seeds:
                 if model_name == "mlp_classifier":
                     records.append(
                         run_classification_runner(
@@ -699,20 +1049,34 @@ def run_quality_suite(*, profile: str, output_dir: Path) -> pd.DataFrame:
         ["dataset", "task", "model", "seed"]
     )
     metrics_frame.to_csv(output_dir / "metrics.csv", index=False)
-    summary = build_summary(metrics_frame, profile=profile)
-    (output_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
-    (output_dir / "summary.md").write_text(render_summary_markdown(summary), encoding="utf-8")
     _save_comparison_plot(metrics_frame, output_dir)
     return metrics_frame
+
+
+def load_tutorial_summary(path: Path | None) -> dict[str, Any] | None:
+    if path is None:
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def main() -> None:
     args = parse_args()
     output_dir = args.output_dir or _default_output_dir(args.profile)
+    suite_started_at = perf_counter()
     metrics_frame = run_quality_suite(profile=args.profile, output_dir=output_dir)
-    summary = build_summary(metrics_frame, profile=args.profile)
+    suite_runtime_sec = perf_counter() - suite_started_at
+    tutorial_summary = load_tutorial_summary(args.tutorial_summary)
+    summary = build_summary(
+        metrics_frame,
+        profile=args.profile,
+        suite_runtime_sec=suite_runtime_sec,
+        tutorial_summary=tutorial_summary,
+    )
+    _write_summary_files(output_dir, summary)
     print(render_summary_markdown(summary))
-    if args.check and summary["gates"]["issues"]:
+    if args.check and not summary["benchmark_ready"]:
+        raise SystemExit(1)
+    if args.require_rc and not summary["release_rc_ready"]:
         raise SystemExit(1)
 
 

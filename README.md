@@ -25,6 +25,7 @@ Train, evaluate, compare, and visualize baseline deep-learning models for single
 - Baseline-first model zoo: AE, VAE, DAE, Transformer AE, and MLP classification.
 - Built-in training, evaluation, comparison, and plotting.
 - Reproducible reports and notebooks for portfolio-ready demonstrations.
+- Built-in benchmark gates on small Scanpy datasets before tutorial defaults change.
 - Gene-expression-focused scope while the core toolkit stabilizes.
 
 ## Supported platforms
@@ -250,7 +251,7 @@ Immediate roadmap target:
 - quality-only hardening toward the next patch release
 - longer notebook tutorials with quickstart and full profiles
 - explicit toolkit-quality benchmarking on small Scanpy built-ins
-- internal release gates for latent quality, classification quality, and seed stability
+- internal release gates for latent quality, tutorial artifacts, runtime budgets, and seed stability
 
 Released so far:
 

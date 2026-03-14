@@ -20,7 +20,8 @@ Planned deliverables:
 - quickstart and full profiles in the public notebooks
 - explicit internal quality-suite scripts and benchmark summaries
 - `PCA` as the classical reference baseline in the comparison tutorial
-- regression checks for PBMC latent quality and classification quality
+- regression checks for PBMC latent quality, classification quality, tutorial artifacts,
+  and runtime budgets
 
 ## Next phase
 
