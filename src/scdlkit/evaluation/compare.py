@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from time import perf_counter
 from typing import Any
 
 import pandas as pd
@@ -39,10 +40,12 @@ def compare_models(
     output_paths: dict[str, str] = {}
     for model_name in models:
         runner = TaskRunner(model=model_name, task=task, **shared)
+        started_at = perf_counter()
         runner.fit(adata)
         metrics = runner.evaluate()
+        runtime_sec = perf_counter() - started_at
         scalar_metrics = {k: v for k, v in metrics.items() if isinstance(v, (int, float))}
-        records.append({"model": model_name, **scalar_metrics})
+        records.append({"model": model_name, "runtime_sec": runtime_sec, **scalar_metrics})
         runners[model_name] = runner
 
     metrics_frame = pd.DataFrame.from_records(records).sort_values("model").reset_index(drop=True)

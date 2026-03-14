@@ -1,0 +1,720 @@
+"""Internal quality suite for benchmark and tutorial regression checks."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import sys
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from time import perf_counter
+from typing import Any
+
+import matplotlib
+import numpy as np
+import pandas as pd
+from anndata import AnnData
+from scipy import sparse
+from sklearn.decomposition import PCA
+from sklearn.linear_model import LogisticRegression
+
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+matplotlib.use("Agg")
+
+QUALITY_GATES: dict[str, float] = {
+    "pbmc_vae_silhouette_min": 0.12,
+    "pbmc_vae_knn_label_consistency_min": 0.85,
+    "pbmc_vae_pearson_min": 0.15,
+    "pbmc_vae_silhouette_std_max": 0.05,
+    "pbmc_classifier_accuracy_min": 0.85,
+    "pbmc_classifier_macro_f1_min": 0.80,
+}
+
+PROFILE_DEFAULTS: dict[str, dict[str, Any]] = {
+    "ci": {
+        "representation": {
+            "pbmc3k_processed": {
+                "models": ("pca", "autoencoder", "vae", "transformer_ae"),
+                "seeds": (42, 52, 62),
+            },
+            "paul15": {
+                "models": ("pca", "vae"),
+                "seeds": (42,),
+            },
+        },
+        "classification": {
+            "pbmc3k_processed": {
+                "models": ("mlp_classifier", "logistic_regression_pca"),
+                "seeds": (42,),
+            },
+        },
+    },
+    "full": {
+        "representation": {
+            "pbmc3k_processed": {
+                "models": ("pca", "autoencoder", "vae", "transformer_ae"),
+                "seeds": (42, 52, 62),
+            },
+            "paul15": {
+                "models": ("pca", "autoencoder", "vae", "transformer_ae"),
+                "seeds": (42, 52, 62),
+            },
+            "moignard15": {
+                "models": ("pca", "autoencoder", "vae"),
+                "seeds": (42,),
+            },
+        },
+        "classification": {
+            "pbmc3k_processed": {
+                "models": ("mlp_classifier", "logistic_regression_pca"),
+                "seeds": (42,),
+            },
+        },
+    },
+}
+
+
+@dataclass(frozen=True, slots=True)
+class DatasetSpec:
+    name: str
+    label_key: str
+    batch_key: str | None = None
+
+
+DATASET_SPECS: dict[str, DatasetSpec] = {
+    "pbmc3k_processed": DatasetSpec(name="pbmc3k_processed", label_key="louvain"),
+    "paul15": DatasetSpec(name="paul15", label_key="paul15_clusters"),
+    "moignard15": DatasetSpec(name="moignard15", label_key="exp_groups"),
+}
+
+COMPACT_TRANSFORMER_MODEL_KWARGS: dict[str, Any] = {
+    "patch_size": 48,
+    "d_model": 64,
+    "n_heads": 2,
+    "n_layers": 1,
+    "decoder_hidden_dims": (128,),
+}
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--profile",
+        choices=tuple(PROFILE_DEFAULTS),
+        default="full",
+        help="Quality-suite profile to run.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Optional output directory. Defaults to a dated folder under artifacts/quality/.",
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Fail with a non-zero exit code when quality gates fail.",
+    )
+    return parser.parse_args()
+
+
+def _utc_timestamp() -> str:
+    return datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+
+
+def _default_output_dir(profile: str) -> Path:
+    return ROOT / "artifacts" / "quality" / f"{_utc_timestamp()}-{profile}"
+
+
+def _load_dataset(name: str) -> tuple[AnnData, DatasetSpec]:
+    import scanpy as sc
+
+    if name == "pbmc3k_processed":
+        data_path = ROOT / "examples" / "data" / "pbmc3k_processed.h5ad"
+        adata = sc.read_h5ad(data_path) if data_path.exists() else sc.datasets.pbmc3k_processed()
+    elif name == "paul15":
+        adata = sc.datasets.paul15()
+    elif name == "moignard15":
+        adata = sc.datasets.moignard15()
+    else:
+        msg = f"Unsupported dataset '{name}'."
+        raise ValueError(msg)
+    return adata, DATASET_SPECS[name]
+
+
+def _to_dense(x_matrix: Any) -> np.ndarray:
+    dense = x_matrix.toarray() if sparse.issparse(x_matrix) else np.asarray(x_matrix)
+    return dense.astype("float32", copy=False)
+
+
+def _process_peak_memory_mb() -> float | None:
+    try:
+        import resource
+    except ImportError:
+        return None
+    raw_value = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    if sys.platform == "darwin":
+        return float(raw_value) / (1024.0 * 1024.0)
+    return float(raw_value) / 1024.0
+
+
+def _save_scanpy_umap(
+    adata: AnnData,
+    latent: np.ndarray,
+    label_key: str,
+    path: Path,
+    *,
+    seed: int,
+) -> None:
+    import scanpy as sc
+    from matplotlib import pyplot as plt
+
+    plot_adata = adata.copy()
+    plot_adata.obsm["X_quality_latent"] = latent
+    sc.pp.neighbors(plot_adata, use_rep="X_quality_latent")
+    sc.tl.umap(plot_adata, random_state=seed)
+    umap_fig = sc.pl.umap(plot_adata, color=label_key, return_fig=True, frameon=False)
+    umap_fig.savefig(path, dpi=150, bbox_inches="tight")
+    plt.close(umap_fig)
+
+
+def _encode_obs(values: pd.Series) -> tuple[np.ndarray, list[str]]:
+    encoded = pd.Categorical(values.astype(str))
+    return encoded.codes.astype(int), list(encoded.categories)
+
+
+def _runner_kwargs(model_name: str, profile: str) -> dict[str, Any]:
+    if model_name == "autoencoder":
+        return {"epochs": 10 if profile == "ci" else 25, "batch_size": 128}
+    if model_name == "vae":
+        return {
+            "epochs": 20 if profile == "ci" else 50,
+            "batch_size": 128,
+            "model_kwargs": {"kl_weight": 1e-3},
+        }
+    if model_name == "transformer_ae":
+        return {
+            "epochs": 10 if profile == "ci" else 25,
+            "batch_size": 128,
+            "model_kwargs": COMPACT_TRANSFORMER_MODEL_KWARGS,
+        }
+    if model_name == "mlp_classifier":
+        return {"epochs": 15 if profile == "ci" else 30, "batch_size": 128}
+    msg = f"Unsupported runner model '{model_name}'."
+    raise ValueError(msg)
+
+
+def _save_loss_curve(runner: Any, output_dir: Path) -> None:
+    from matplotlib import pyplot as plt
+
+    loss_fig, _ = runner.plot_losses()
+    loss_fig.savefig(output_dir / "loss_curve.png", dpi=150, bbox_inches="tight")
+    plt.close(loss_fig)
+
+
+def _save_confusion_plot(
+    confusion: list[list[int]],
+    class_names: list[str],
+    output_dir: Path,
+) -> None:
+    from matplotlib import pyplot as plt
+
+    from scdlkit.visualization.classification import plot_confusion_matrix
+
+    confusion_fig, _ = plot_confusion_matrix(confusion, class_names=class_names)
+    confusion_fig.savefig(output_dir / "confusion_matrix.png", dpi=150, bbox_inches="tight")
+    plt.close(confusion_fig)
+
+
+def run_representation_runner(
+    *,
+    dataset_name: str,
+    adata: AnnData,
+    label_key: str,
+    batch_key: str | None,
+    model_name: str,
+    seed: int,
+    profile: str,
+    output_root: Path,
+) -> dict[str, Any]:
+    from scdlkit import TaskRunner
+
+    output_dir = output_root / dataset_name / "representation" / model_name / f"seed_{seed}"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    settings = _runner_kwargs(model_name, profile)
+    runner = TaskRunner(
+        model=model_name,
+        task="representation",
+        label_key=label_key,
+        batch_key=batch_key,
+        device="auto",
+        seed=seed,
+        random_state=seed,
+        output_dir=str(output_dir),
+        **settings,
+    )
+    started_at = perf_counter()
+    runner.fit(adata)
+    metrics = runner.evaluate()
+    runtime_sec = perf_counter() - started_at
+    runner.save_report(output_dir / "report.md")
+    _save_loss_curve(runner, output_dir)
+    latent = runner.encode(adata)
+    _save_scanpy_umap(adata, latent, label_key, output_dir / "latent_umap.png", seed=seed)
+    scalar_metrics = {
+        key: value for key, value in metrics.items() if isinstance(value, (int, float))
+    }
+    return {
+        "dataset": dataset_name,
+        "task": "representation",
+        "model": model_name,
+        "seed": seed,
+        "profile": profile,
+        "runtime_sec": runtime_sec,
+        "peak_memory_mb": _process_peak_memory_mb(),
+        "artifact_dir": str(output_dir),
+        **scalar_metrics,
+    }
+
+
+def run_pca_baseline(
+    *,
+    dataset_name: str,
+    adata: AnnData,
+    label_key: str,
+    batch_key: str | None,
+    seed: int,
+    output_root: Path,
+    n_components: int = 32,
+) -> dict[str, Any]:
+    from scdlkit.evaluation.metrics import reconstruction_metrics, representation_metrics
+
+    output_dir = output_root / dataset_name / "representation" / "pca" / f"seed_{seed}"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    x_matrix = _to_dense(adata.X)
+    labels, _ = _encode_obs(adata.obs[label_key])
+    batches = None
+    if batch_key is not None and batch_key in adata.obs:
+        batches, _ = _encode_obs(adata.obs[batch_key])
+    n_pcs = min(n_components, x_matrix.shape[0] - 1, x_matrix.shape[1])
+    started_at = perf_counter()
+    pca = PCA(n_components=n_pcs, random_state=seed)
+    latent = pca.fit_transform(x_matrix)
+    reconstruction = pca.inverse_transform(latent)
+    runtime_sec = perf_counter() - started_at
+    metrics = reconstruction_metrics(x_matrix, reconstruction)
+    metrics.update(representation_metrics(latent, labels, batches))
+    report_lines = [
+        "# PCA baseline report",
+        "",
+        f"- Dataset: `{dataset_name}`",
+        f"- Components: `{n_pcs}`",
+        "",
+    ]
+    report_lines.extend(f"- `{key}`: `{value:.4f}`" for key, value in metrics.items())
+    (output_dir / "report.md").write_text("\n".join(report_lines) + "\n", encoding="utf-8")
+    pd.DataFrame([metrics]).to_csv(output_dir / "report.csv", index=False)
+    _save_scanpy_umap(adata, latent, label_key, output_dir / "latent_umap.png", seed=seed)
+    return {
+        "dataset": dataset_name,
+        "task": "representation",
+        "model": "pca",
+        "seed": seed,
+        "profile": "baseline",
+        "runtime_sec": runtime_sec,
+        "peak_memory_mb": _process_peak_memory_mb(),
+        "artifact_dir": str(output_dir),
+        **metrics,
+    }
+
+
+def run_classification_runner(
+    *,
+    dataset_name: str,
+    adata: AnnData,
+    label_key: str,
+    seed: int,
+    profile: str,
+    output_root: Path,
+) -> dict[str, Any]:
+    from scdlkit import TaskRunner
+
+    output_dir = output_root / dataset_name / "classification" / "mlp_classifier" / f"seed_{seed}"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    settings = _runner_kwargs("mlp_classifier", profile)
+    runner = TaskRunner(
+        model="mlp_classifier",
+        task="classification",
+        label_key=label_key,
+        device="auto",
+        seed=seed,
+        random_state=seed,
+        output_dir=str(output_dir),
+        **settings,
+    )
+    started_at = perf_counter()
+    runner.fit(adata)
+    metrics = runner.evaluate()
+    runtime_sec = perf_counter() - started_at
+    runner.save_report(output_dir / "report.md")
+    _save_loss_curve(runner, output_dir)
+    confusion = metrics.get("confusion_matrix")
+    if confusion is None:
+        msg = "Classification runner did not return a confusion matrix."
+        raise RuntimeError(msg)
+    _, class_names = _encode_obs(adata.obs[label_key])
+    _save_confusion_plot(confusion, class_names, output_dir)
+    scalar_metrics = {
+        key: value for key, value in metrics.items() if isinstance(value, (int, float))
+    }
+    return {
+        "dataset": dataset_name,
+        "task": "classification",
+        "model": "mlp_classifier",
+        "seed": seed,
+        "profile": profile,
+        "runtime_sec": runtime_sec,
+        "peak_memory_mb": _process_peak_memory_mb(),
+        "artifact_dir": str(output_dir),
+        **scalar_metrics,
+    }
+
+
+def run_logistic_regression_pca(
+    *,
+    dataset_name: str,
+    adata: AnnData,
+    label_key: str,
+    seed: int,
+    output_root: Path,
+) -> dict[str, Any]:
+    from scdlkit import prepare_data
+    from scdlkit.evaluation.metrics import classification_metrics
+
+    output_dir = (
+        output_root / dataset_name / "classification" / "logistic_regression_pca" / f"seed_{seed}"
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+    prepared = prepare_data(adata, label_key=label_key, random_state=seed)
+    train_split = prepared.train
+    test_split = prepared.test or prepared.val
+    if test_split is None or train_split.labels is None or test_split.labels is None:
+        msg = "Classification benchmark requires train/test labels."
+        raise RuntimeError(msg)
+    x_train = _to_dense(train_split.X)
+    x_test = _to_dense(test_split.X)
+    n_components = min(32, x_train.shape[0] - 1, x_train.shape[1])
+    started_at = perf_counter()
+    pca = PCA(n_components=n_components, random_state=seed)
+    train_latent = pca.fit_transform(x_train)
+    test_latent = pca.transform(x_test)
+    classifier = LogisticRegression(max_iter=1000, random_state=seed)
+    classifier.fit(train_latent, train_split.labels)
+    logits = classifier.predict_proba(test_latent)
+    runtime_sec = perf_counter() - started_at
+    metrics = classification_metrics(test_split.labels, logits)
+    class_names = list(prepared.label_encoder) if prepared.label_encoder is not None else []
+    confusion = metrics.get("confusion_matrix")
+    if isinstance(confusion, list):
+        _save_confusion_plot(confusion, class_names, output_dir)
+    report_lines = [
+        "# Logistic regression on PCA baseline",
+        "",
+        f"- Dataset: `{dataset_name}`",
+        f"- PCA components: `{n_components}`",
+        "",
+    ]
+    report_lines.extend(
+        f"- `{key}`: `{value:.4f}`" for key, value in metrics.items() if isinstance(value, float)
+    )
+    (output_dir / "report.md").write_text("\n".join(report_lines) + "\n", encoding="utf-8")
+    scalar_metrics = {
+        key: value for key, value in metrics.items() if isinstance(value, (int, float))
+    }
+    return {
+        "dataset": dataset_name,
+        "task": "classification",
+        "model": "logistic_regression_pca",
+        "seed": seed,
+        "profile": "baseline",
+        "runtime_sec": runtime_sec,
+        "peak_memory_mb": _process_peak_memory_mb(),
+        "artifact_dir": str(output_dir),
+        **scalar_metrics,
+    }
+
+
+def aggregate_metrics(metrics_frame: pd.DataFrame) -> pd.DataFrame:
+    numeric_columns = metrics_frame.select_dtypes(include=("number",)).columns.tolist()
+    value_columns = [column for column in numeric_columns if column != "seed"]
+    if not value_columns:
+        return pd.DataFrame()
+    aggregated = (
+        metrics_frame.groupby(["dataset", "task", "model"])[value_columns]
+        .agg(["mean", "std"])
+        .reset_index()
+    )
+    aggregated.columns = [
+        "_".join(part for part in column if part).rstrip("_")
+        if isinstance(column, tuple)
+        else column
+        for column in aggregated.columns.to_flat_index()
+    ]
+    return aggregated
+
+
+def evaluate_quality_gates(metrics_frame: pd.DataFrame) -> list[str]:
+    issues: list[str] = []
+    pbmc_vae = metrics_frame[
+        (metrics_frame["dataset"] == "pbmc3k_processed")
+        & (metrics_frame["task"] == "representation")
+        & (metrics_frame["model"] == "vae")
+    ]
+    if len(pbmc_vae) < 3:
+        issues.append("PBMC VAE benchmark did not run across three seeds.")
+    else:
+        silhouette_mean = float(pbmc_vae["silhouette"].mean())
+        knn_mean = float(pbmc_vae["knn_label_consistency"].mean())
+        pearson_mean = float(pbmc_vae["pearson"].mean())
+        silhouette_std = float(pbmc_vae["silhouette"].std(ddof=0))
+        if silhouette_mean < QUALITY_GATES["pbmc_vae_silhouette_min"]:
+            issues.append(
+                "PBMC VAE silhouette fell below "
+                f"{QUALITY_GATES['pbmc_vae_silhouette_min']:.2f} "
+                f"(observed {silhouette_mean:.3f})."
+            )
+        if knn_mean < QUALITY_GATES["pbmc_vae_knn_label_consistency_min"]:
+            issues.append(
+                "PBMC VAE kNN label consistency fell below "
+                f"{QUALITY_GATES['pbmc_vae_knn_label_consistency_min']:.2f} "
+                f"(observed {knn_mean:.3f})."
+            )
+        if pearson_mean < QUALITY_GATES["pbmc_vae_pearson_min"]:
+            issues.append(
+                "PBMC VAE Pearson correlation fell below "
+                f"{QUALITY_GATES['pbmc_vae_pearson_min']:.2f} "
+                f"(observed {pearson_mean:.3f})."
+            )
+        if silhouette_std > QUALITY_GATES["pbmc_vae_silhouette_std_max"]:
+            issues.append(
+                "PBMC VAE silhouette variance exceeded "
+                f"{QUALITY_GATES['pbmc_vae_silhouette_std_max']:.2f} "
+                f"(observed {silhouette_std:.3f})."
+            )
+
+    pbmc_classifier = metrics_frame[
+        (metrics_frame["dataset"] == "pbmc3k_processed")
+        & (metrics_frame["task"] == "classification")
+        & (metrics_frame["model"] == "mlp_classifier")
+    ]
+    if pbmc_classifier.empty:
+        issues.append("PBMC classifier benchmark did not run.")
+    else:
+        accuracy = float(pbmc_classifier["accuracy"].mean())
+        macro_f1 = float(pbmc_classifier["macro_f1"].mean())
+        if accuracy < QUALITY_GATES["pbmc_classifier_accuracy_min"]:
+            issues.append(
+                "PBMC classifier accuracy fell below "
+                f"{QUALITY_GATES['pbmc_classifier_accuracy_min']:.2f} "
+                f"(observed {accuracy:.3f})."
+            )
+        if macro_f1 < QUALITY_GATES["pbmc_classifier_macro_f1_min"]:
+            issues.append(
+                "PBMC classifier macro F1 fell below "
+                f"{QUALITY_GATES['pbmc_classifier_macro_f1_min']:.2f} "
+                f"(observed {macro_f1:.3f})."
+            )
+    return issues
+
+
+def build_summary(metrics_frame: pd.DataFrame, *, profile: str) -> dict[str, Any]:
+    aggregated = aggregate_metrics(metrics_frame)
+    issues = evaluate_quality_gates(metrics_frame)
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "profile": profile,
+        "num_runs": int(len(metrics_frame)),
+        "gates": {
+            "passed": not issues,
+            "issues": issues,
+            "thresholds": QUALITY_GATES,
+        },
+        "aggregates": aggregated.to_dict(orient="records"),
+    }
+
+
+def render_summary_markdown(summary: dict[str, Any]) -> str:
+    gates = summary["gates"]
+    lines = [
+        "# scDLKit quality-suite summary",
+        "",
+        f"- Profile: `{summary['profile']}`",
+        f"- Generated at: `{summary['generated_at']}`",
+        f"- Total runs: `{summary['num_runs']}`",
+        f"- Gates passed: `{gates['passed']}`",
+        "",
+        "## Quality gates",
+        "",
+    ]
+    if gates["issues"]:
+        lines.extend(f"- {issue}" for issue in gates["issues"])
+    else:
+        lines.append("- All configured quality gates passed.")
+    lines.extend(
+        [
+            "",
+            "## Aggregated metrics",
+            "",
+            "| Dataset | Task | Model | Key means |",
+            "| --- | --- | --- | --- |",
+        ]
+    )
+    for row in summary["aggregates"]:
+        key_means = []
+        metric_names = (
+            "silhouette_mean",
+            "knn_label_consistency_mean",
+            "pearson_mean",
+            "accuracy_mean",
+            "macro_f1_mean",
+            "runtime_sec_mean",
+        )
+        for metric in metric_names:
+            if metric in row and not math.isnan(float(row[metric])):
+                key_means.append(f"{metric}={float(row[metric]):.3f}")
+        lines.append(
+            "| "
+            f"{row['dataset']} | {row['task']} | {row['model']} | "
+            f"{', '.join(key_means) or 'n/a'} |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Notes",
+            "",
+            "- `pbmc3k_processed` is the primary release-quality representation benchmark.",
+            "- `paul15` is the secondary built-in benchmark for checking dataset sensitivity.",
+            "- `transformer_ae` uses a compact CPU-friendly configuration in the quality suite: "
+            "`patch_size=48`, `d_model=64`, `n_heads=2`, `n_layers=1`.",
+            "- `logistic_regression_pca` is a classical reference baseline, not part of the "
+            "public scDLKit model zoo.",
+        ]
+    )
+    return "\n".join(lines) + "\n"
+
+
+def _save_comparison_plot(metrics_frame: pd.DataFrame, output_dir: Path) -> None:
+    from matplotlib import pyplot as plt
+
+    from scdlkit.visualization.compare import plot_model_comparison
+
+    pbmc_representation = metrics_frame[
+        (metrics_frame["dataset"] == "pbmc3k_processed")
+        & (metrics_frame["task"] == "representation")
+    ].copy()
+    if pbmc_representation.empty:
+        return
+    summary = (
+        pbmc_representation.groupby("model", as_index=False)[["silhouette", "runtime_sec"]]
+        .mean(numeric_only=True)
+        .sort_values("model")
+    )
+    comparison_fig, _ = plot_model_comparison(summary, metric="silhouette")
+    comparison_fig.savefig(
+        output_dir / "pbmc_representation_silhouette.png",
+        dpi=150,
+        bbox_inches="tight",
+    )
+    plt.close(comparison_fig)
+
+
+def run_quality_suite(*, profile: str, output_dir: Path) -> pd.DataFrame:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    records: list[dict[str, Any]] = []
+    profile_config = PROFILE_DEFAULTS[profile]
+
+    for dataset_name, dataset_config in profile_config["representation"].items():
+        adata, spec = _load_dataset(dataset_name)
+        for model_name in dataset_config["models"]:
+            for seed in dataset_config["seeds"]:
+                if model_name == "pca":
+                    records.append(
+                        run_pca_baseline(
+                            dataset_name=dataset_name,
+                            adata=adata,
+                            label_key=spec.label_key,
+                            batch_key=spec.batch_key,
+                            seed=seed,
+                            output_root=output_dir,
+                        )
+                    )
+                else:
+                    records.append(
+                        run_representation_runner(
+                            dataset_name=dataset_name,
+                            adata=adata,
+                            label_key=spec.label_key,
+                            batch_key=spec.batch_key,
+                            model_name=model_name,
+                            seed=seed,
+                            profile=profile,
+                            output_root=output_dir,
+                        )
+                    )
+
+    for dataset_name, dataset_config in profile_config["classification"].items():
+        adata, spec = _load_dataset(dataset_name)
+        for model_name in dataset_config["models"]:
+            for seed in dataset_config["seeds"]:
+                if model_name == "mlp_classifier":
+                    records.append(
+                        run_classification_runner(
+                            dataset_name=dataset_name,
+                            adata=adata,
+                            label_key=spec.label_key,
+                            seed=seed,
+                            profile=profile,
+                            output_root=output_dir,
+                        )
+                    )
+                else:
+                    records.append(
+                        run_logistic_regression_pca(
+                            dataset_name=dataset_name,
+                            adata=adata,
+                            label_key=spec.label_key,
+                            seed=seed,
+                            output_root=output_dir,
+                        )
+                    )
+
+    metrics_frame = pd.DataFrame.from_records(records).sort_values(
+        ["dataset", "task", "model", "seed"]
+    )
+    metrics_frame.to_csv(output_dir / "metrics.csv", index=False)
+    summary = build_summary(metrics_frame, profile=profile)
+    (output_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    (output_dir / "summary.md").write_text(render_summary_markdown(summary), encoding="utf-8")
+    _save_comparison_plot(metrics_frame, output_dir)
+    return metrics_frame
+
+
+def main() -> None:
+    args = parse_args()
+    output_dir = args.output_dir or _default_output_dir(args.profile)
+    metrics_frame = run_quality_suite(profile=args.profile, output_dir=output_dir)
+    summary = build_summary(metrics_frame, profile=args.profile)
+    print(render_summary_markdown(summary))
+    if args.check and summary["gates"]["issues"]:
+        raise SystemExit(1)
+
+
+if __name__ == "__main__":
+    main()

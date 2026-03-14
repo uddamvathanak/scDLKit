@@ -43,13 +43,14 @@ See how to store scDLKit latent embeddings in `adata.obsm` and continue with sta
 - one shared CPU/GPU path with `device="auto"`
 - reproducible reports, plots, and tutorial notebooks
 - clean separation between model workflows and Scanpy analysis
+- gene-expression scope first, while defaults and tutorials are still being hardened
 
 ## Example outputs
 
-```{figure} _static/first_run_loss_curve.png
-:alt: Training loss curve from the synthetic smoke example
+```{figure} _static/pbmc_vae_latent_umap.png
+:alt: Latent UMAP from the Scanpy PBMC quickstart
 
-Loss curve from the lightweight synthetic smoke example.
+Latent UMAP from the Scanpy PBMC quickstart. A healthy quickstart run should separate the major PBMC populations into broad regions rather than collapsing into a single mixed cloud.
 ```
 
 ```{figure} _static/first_run_latent_pca.png
@@ -67,10 +68,11 @@ Benchmark comparison chart from the PBMC model-comparison tutorial.
 ## Recommended learning path
 
 1. Install the tutorial dependencies from PyPI.
-2. Run the Scanpy PBMC quickstart notebook.
-3. Continue with the model comparison notebook.
-4. Use the classification notebook once you want a supervised baseline.
-5. Keep the synthetic notebook only as a minimal smoke or fallback path.
+2. Run the Scanpy PBMC quickstart notebook in the default `quickstart` profile.
+3. Switch that notebook to the `full` profile when you want a longer run and stronger qualitative separation.
+4. Continue with the model comparison notebook, which treats `PCA` as the classical reference baseline.
+5. Use the classification notebook once you want a supervised baseline.
+6. Keep the synthetic notebook only as a minimal smoke or fallback path.
 
 ```{toctree}
 :hidden:

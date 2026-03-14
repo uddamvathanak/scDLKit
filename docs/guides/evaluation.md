@@ -2,6 +2,8 @@
 
 Evaluation is built into the workflow rather than left to ad hoc notebook code.
 
+The release process also uses an internal quality suite so the toolkit is evaluated against itself on small Scanpy built-ins before public tutorial defaults are changed.
+
 ## Core metrics
 
 Representation and reconstruction workflows can report:
@@ -14,6 +16,7 @@ Representation and reconstruction workflows can report:
 - `knn_label_consistency`
 - `ari`
 - `nmi`
+- `runtime_sec` in comparison and benchmark summaries
 
 Classification workflows can report:
 
@@ -35,3 +38,5 @@ You can export a Markdown report and scalar metrics table:
 ```python
 runner.save_report("artifacts/report.md")
 ```
+
+For benchmark work, treat `PCA` as the classical reference baseline rather than comparing deep-learning models only against each other.

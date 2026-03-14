@@ -11,14 +11,14 @@ Start with Scanpy for the dataset object and downstream neighborhood analysis, t
 :link: /_tutorials/scanpy_pbmc_quickstart
 :link-type: doc
 
-Learn the main scDLKit workflow on `pbmc3k_processed`, then store the latent representation in `adata.obsm` for Scanpy analysis.
+Learn the main scDLKit workflow on `pbmc3k_processed`, then store the latent representation in `adata.obsm` for Scanpy analysis. This notebook ships with a `quickstart` profile and a longer `full` profile.
 ```
 
 ```{grid-item-card} PBMC model comparison
 :link: /_tutorials/pbmc_model_comparison
 :link-type: doc
 
-Compare AutoEncoder, VAE, and Transformer AE baselines on the same PBMC workflow.
+Compare `PCA`, AutoEncoder, VAE, and Transformer AE baselines on the same PBMC workflow.
 ```
 
 ```{grid-item-card} PBMC classification
@@ -39,9 +39,10 @@ Use the minimal synthetic notebook only when you want the smallest dependency pa
 ## Learning order
 
 1. Scanpy PBMC quickstart
-2. PBMC model comparison
-3. PBMC classification
-4. Synthetic smoke tutorial
+2. Re-run the PBMC quickstart in `full` mode when you want a longer baseline fit
+3. PBMC model comparison
+4. PBMC classification
+5. Synthetic smoke tutorial
 
 ```{toctree}
 :hidden:

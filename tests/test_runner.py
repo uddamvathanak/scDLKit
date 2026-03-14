@@ -75,6 +75,7 @@ def test_compare_models_writes_outputs(dense_adata, tmp_path: Path) -> None:
         output_dir=str(tmp_path / "compare"),
     )
     assert set(result.metrics_frame["model"]) == {"autoencoder", "transformer_ae"}
+    assert "runtime_sec" in result.metrics_frame.columns
     assert (tmp_path / "compare" / "benchmark_metrics.csv").exists()
     assert (tmp_path / "compare" / "benchmark_report.md").exists()
     assert (tmp_path / "compare" / "benchmark_comparison.png").exists()

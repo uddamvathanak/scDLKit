@@ -95,3 +95,25 @@ jobs:
         with:
           name: tutorial-smoke-ubuntu
           path: artifacts
+
+  quality-regression:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Install package and benchmark dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[dev,tutorials]
+      - name: Run quality regression suite
+        run: python scripts/run_quality_suite.py --profile ci --check
+      - name: Upload quality artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-regression-artifacts
+          path: artifacts/quality
