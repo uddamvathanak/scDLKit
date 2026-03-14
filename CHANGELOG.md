@@ -2,10 +2,13 @@
 
 ## Unreleased
 
-- Added an internal quality suite for release evaluation on Scanpy built-in datasets.
-- Added quickstart versus full tutorial profiles for the public notebook workflow.
-- Expanded PBMC comparison guidance to include `PCA` as a classical baseline reference.
-- Added maintainer-only quality gates and roadmap notes to `AGENTS.md`.
+## 0.1.2
+
+- Hardened the internal benchmark suite into a release-candidate gate around built-in Scanpy datasets.
+- Added tutorial-suite execution and artifact validation so notebook outputs are checked, not only executed.
+- Added missing-run detection, runtime budgets, and release-RC readiness summaries for quality evaluation.
+- Added stable output-path contracts to the public notebooks and tightened docs around benchmark evidence.
+- Kept the package gene-expression-focused with no public runtime API changes.
 
 ## 0.1.1
 

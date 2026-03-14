@@ -2,7 +2,10 @@
 
 Evaluation is built into the workflow rather than left to ad hoc notebook code.
 
-The release process also uses an internal quality suite so the toolkit is evaluated against itself on small Scanpy built-ins before public tutorial defaults are changed.
+The release process also uses an internal quality suite so the toolkit is evaluated
+against itself on small Scanpy built-ins before public tutorial defaults are changed.
+The primary release-gate datasets are `pbmc3k_processed` and `paul15`, with `PCA`
+kept as the classical reference baseline in comparison work.
 
 ## Core metrics
 
