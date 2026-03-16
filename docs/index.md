@@ -25,7 +25,7 @@ Start with the primary notebook tutorial built on `scanpy.datasets.pbmc3k_proces
 :link: tutorials/index
 :link-type: doc
 
-Open the notebook walkthroughs for representation learning, model comparison, and classification.
+Open the notebook walkthroughs for representation learning, model comparison, classification, and custom-model prototyping.
 ```
 
 ```{grid-item-card} Scanpy integration
@@ -33,6 +33,13 @@ Open the notebook walkthroughs for representation learning, model comparison, an
 :link-type: doc
 
 See how to store scDLKit latent embeddings in `adata.obsm` and continue with standard Scanpy analysis.
+```
+
+```{grid-item-card} Custom models
+:link: guides/custom-models
+:link-type: doc
+
+Wrap a raw PyTorch module and train it through `Trainer` when you need a custom baseline outside the built-in registry.
 ```
 ````
 
@@ -73,7 +80,8 @@ Benchmark comparison chart from the PBMC model-comparison tutorial.
 3. Switch that notebook to the `full` profile when you want a longer run and stronger qualitative separation.
 4. Continue with the model comparison notebook, which treats `PCA` as the classical reference baseline.
 5. Use the classification notebook once you want a supervised baseline.
-6. Keep the synthetic notebook only as a minimal smoke or fallback path.
+6. Move to the custom-model tutorial when you want to prototype your own `nn.Module` through `Trainer`.
+7. Keep the synthetic notebook only as a minimal smoke or fallback path.
 
 ```{toctree}
 :hidden:
@@ -85,6 +93,7 @@ guides/scanpy-integration
 guides/data
 guides/models
 guides/training
+guides/custom-models
 guides/evaluation
 guides/visualization
 guides/comparison

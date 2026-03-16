@@ -23,6 +23,13 @@ The public API stays intentionally compact.
    :members:
 ```
 
+## Adapter-based custom models
+
+```{eval-rst}
+.. automodule:: scdlkit.adapters
+   :members:
+```
+
 ## Model registry and implementations
 
 ```{eval-rst}

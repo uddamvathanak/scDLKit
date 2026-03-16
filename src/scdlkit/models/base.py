@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import ClassVar
-
 import torch
 from torch import nn
 
@@ -11,7 +9,7 @@ from torch import nn
 class BaseModel(nn.Module):
     """Common base class for all registered models."""
 
-    supported_tasks: ClassVar[tuple[str, ...]] = ()
+    supported_tasks: tuple[str, ...] = ()
 
     def __init__(self, input_dim: int):
         super().__init__()

@@ -17,6 +17,7 @@ Train, evaluate, compare, and visualize baseline deep-learning models for single
 - Install path for tutorials: `python -m pip install "scdlkit[tutorials]"`
 - CPU and GPU use the same notebook path through `device="auto"`
 - Secondary notebooks: `examples/compare_models_pbmc.ipynb`, `examples/classification_demo.ipynb`
+- Custom model notebook: `examples/custom_model_extension.ipynb`
 - Synthetic smoke examples: `examples/first_run_synthetic.ipynb`, `examples/first_run_synthetic.py`
 
 ## Why scDLKit
@@ -122,6 +123,7 @@ Additional Scanpy-first notebooks:
 
 - `examples/compare_models_pbmc.ipynb`: compare `PCA`, `autoencoder`, `vae`, and `transformer_ae`
 - `examples/classification_demo.ipynb`: run the `mlp_classifier` baseline and inspect a confusion matrix
+- `examples/custom_model_extension.ipynb`: wrap a raw PyTorch autoencoder and train it through `Trainer`
 
 The synthetic notebook and script are still available, but they are now the smoke-test path rather than the primary researcher onboarding flow:
 
@@ -164,6 +166,14 @@ Lower-level:
 from scdlkit import Trainer, create_model, prepare_data
 ```
 
+Custom-model adapters:
+
+```python
+from scdlkit.adapters import wrap_classification_module, wrap_reconstruction_module
+```
+
+Custom wrapped models are supported through `Trainer` first. `TaskRunner` remains the built-in high-level path for bundled scDLKit models.
+
 Comparison:
 
 ```python
@@ -197,8 +207,9 @@ benchmark = compare_models(
 - Gene-expression baselines for AnnData workflows
 - Scanpy-first tutorial and downstream embedding usage
 - Built-in deep-learning baselines plus classical comparison context in notebooks
+- Adapter-based custom PyTorch model support through `Trainer`
 
-Spatial omics, multimodal workflows, and custom PyTorch model adapters are future work once the gene-expression toolkit quality gates stay stable.
+Foundation-model integration, spatial omics, and multimodal workflows remain future work once the gene-expression toolkit quality gates stay stable.
 
 ## Documentation
 
@@ -248,10 +259,10 @@ If you want the workflow to bootstrap Pages automatically instead of doing the o
 
 Immediate roadmap target:
 
-- quality-only hardening toward the next patch release
-- longer notebook tutorials with quickstart and full profiles
-- explicit toolkit-quality benchmarking on small Scanpy built-ins
-- internal release gates for latent quality, tutorial artifacts, runtime budgets, and seed stability
+- adapter-first custom-model support through `Trainer`
+- keep the built-in `TaskRunner` story stable for bundled baselines
+- treat custom adapters as the bridge to later foundation-model integration
+- keep the toolkit gene-expression-focused while the extension path hardens
 
 Released so far:
 
@@ -263,7 +274,7 @@ Released so far:
 
 Later:
 
-- adapter-based custom PyTorch model support
+- foundation-model integration built on top of the adapter path
 - deeper downstream tutorials
 - spatial baselines only after the gene-expression toolkit is stable
 

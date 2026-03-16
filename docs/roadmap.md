@@ -2,36 +2,25 @@
 
 ## Current phase
 
-scDLKit is in a quality-hardening phase rather than a model-zoo expansion phase.
+scDLKit is in an adapter-first extensibility phase on top of the earlier quality-hardening work.
 
 Immediate goals:
 
-- stabilize the public API and default behaviors
-- lengthen the public tutorials without changing the overall workflow
-- benchmark the toolkit itself on small built-in Scanpy datasets
-- keep the project gene-expression-only until the quality gates stay green
+- keep the public built-in API stable while adding a narrow custom-model path
+- let users prototype raw PyTorch modules through `Trainer`
+- preserve the Scanpy handoff workflow through `adata.obsm`
+- keep the project gene-expression-only until the extension path is stable
 
-## Immediate milestone
+## Current extensibility direction
 
-Target: `v0.1.2` quality release
+Target: `v0.1.3` adapter-first custom-model support
 
-Planned deliverables:
+Current direction:
 
-- quickstart and full profiles in the public notebooks
-- explicit internal quality-suite scripts and benchmark summaries
-- `PCA` as the classical reference baseline in the comparison tutorial
-- regression checks for PBMC latent quality, classification quality, tutorial artifacts,
-  and runtime budgets
-
-## Next phase
-
-Target: `v0.1.3` extensibility release
-
-Planned direction:
-
-- adapter-based support for user-supplied PyTorch modules
+- adapter-based support for user-supplied PyTorch modules through `Trainer`
 - keep the built-in registry path for bundled baselines
 - show custom-model integration without changing the Scanpy downstream workflow
+- treat this as the bridge to later foundation-model integration rather than the foundation-model layer itself
 
 ## Later phase
 
@@ -42,6 +31,7 @@ Planned direction:
 - deeper downstream tutorials built around the latent embeddings
 - stronger guidance on when to use PCA versus scDLKit baselines
 - reconstruction and denoising sanity-check tutorials
+- later foundation-model integration once the adapter path is stable
 
 ## Deferred work
 
@@ -49,5 +39,6 @@ Planned direction:
 - spatial baseline support
 - multimodal workflows
 - broad framework-style expansion
+- foundation-model fine-tuning before the adapter path is stable
 
 The main priority remains a trustworthy baseline toolkit rather than a broad single-cell framework.

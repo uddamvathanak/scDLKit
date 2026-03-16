@@ -18,6 +18,9 @@ class ClassificationTask(BaseTask):
         model: torch.nn.Module,
         batch: dict[str, torch.Tensor],
     ) -> tuple[torch.Tensor, dict[str, float], dict[str, torch.Tensor]]:
+        custom_compute_loss = getattr(model, "compute_task_loss", None)
+        if callable(custom_compute_loss):
+            return custom_compute_loss(self.name, batch)
         logits = model(batch["x"])["logits"]
         loss = functional.cross_entropy(logits, batch["y"])
         outputs = {"logits": logits}
