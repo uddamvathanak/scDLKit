@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.3
+
 - Added `scdlkit.adapters` with adapter-first support for wrapping custom PyTorch reconstruction and classification modules through `Trainer`.
 - Exported low-level report helpers from `scdlkit.evaluation` so custom-model workflows can save reports without internal imports.
 - Added a public custom-model tutorial and docs guide showing how to wrap a raw autoencoder, evaluate it, and continue with Scanpy.
