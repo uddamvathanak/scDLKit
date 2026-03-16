@@ -18,6 +18,7 @@ NOTEBOOK_MAP = {
     "scanpy_pbmc_quickstart.ipynb": ROOT / "examples" / "train_vae_pbmc.ipynb",
     "pbmc_model_comparison.ipynb": ROOT / "examples" / "compare_models_pbmc.ipynb",
     "pbmc_classification.ipynb": ROOT / "examples" / "classification_demo.ipynb",
+    "custom_model_extension.ipynb": ROOT / "examples" / "custom_model_extension.ipynb",
     "synthetic_smoke.ipynb": ROOT / "examples" / "first_run_synthetic.ipynb",
 }
 

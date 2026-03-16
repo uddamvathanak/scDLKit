@@ -19,6 +19,9 @@ class ReconstructionTask(BaseTask):
         model: torch.nn.Module,
         batch: dict[str, torch.Tensor],
     ) -> tuple[torch.Tensor, dict[str, float], dict[str, torch.Tensor]]:
+        custom_compute_loss = getattr(model, "compute_task_loss", None)
+        if callable(custom_compute_loss):
+            return custom_compute_loss(self.name, batch)
         outputs = model(batch["x"])
         reconstruction = outputs["reconstruction"]
         recon_loss = functional.mse_loss(reconstruction, batch["x"])

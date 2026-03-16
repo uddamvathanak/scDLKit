@@ -49,6 +49,13 @@ class Trainer:
         self.best_state_dict_: dict[str, Any] | None = None
         self.best_loss_: float | None = None
         self.best_epoch_: int | None = None
+        supported_tasks = getattr(self.model, "supported_tasks", ())
+        if supported_tasks and self.task.name not in supported_tasks:
+            msg = (
+                f"Model '{self.model.__class__.__name__}' does not support task "
+                f"'{self.task.name}'."
+            )
+            raise ValueError(msg)
         self.model.to(self.device)
 
     @staticmethod

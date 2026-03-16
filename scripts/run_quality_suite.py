@@ -104,6 +104,7 @@ REQUIRED_TUTORIAL_NAMES = (
     "scanpy_pbmc_quickstart",
     "pbmc_model_comparison",
     "pbmc_classification",
+    "custom_model_extension",
     "synthetic_smoke",
 )
 

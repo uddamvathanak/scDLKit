@@ -30,13 +30,14 @@ def _tutorial_summary(*, passed: bool = True, runtime_passed: bool = True) -> di
             {"name": "scanpy_pbmc_quickstart"},
             {"name": "pbmc_model_comparison"},
             {"name": "pbmc_classification"},
+            {"name": "custom_model_extension"},
             {"name": "synthetic_smoke"},
         ],
         "runtime": {
             "total_sec": 120.0,
             "budget_sec": 480.0,
             "passed": runtime_passed,
-            "notebook_count": 4,
+            "notebook_count": 5,
         },
         "artifact_checks": {
             "passed": passed,

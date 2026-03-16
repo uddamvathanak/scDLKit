@@ -28,6 +28,13 @@ Compare `PCA`, AutoEncoder, VAE, and Transformer AE baselines on the same PBMC w
 Run the classification baseline and inspect accuracy, macro F1, and a confusion matrix.
 ```
 
+```{grid-item-card} Custom model extension
+:link: /_tutorials/custom_model_extension
+:link-type: doc
+
+Wrap a raw PyTorch autoencoder with the adapter layer, train it through `Trainer`, and continue with Scanpy on the learned latent space.
+```
+
 ```{grid-item-card} Synthetic smoke tutorial
 :link: /_tutorials/synthetic_smoke
 :link-type: doc
@@ -42,7 +49,8 @@ Use the minimal synthetic notebook only when you want the smallest dependency pa
 2. Re-run the PBMC quickstart in `full` mode when you want a longer baseline fit
 3. PBMC model comparison
 4. PBMC classification
-5. Synthetic smoke tutorial
+5. Custom model extension
+6. Synthetic smoke tutorial
 
 ```{toctree}
 :hidden:
@@ -51,5 +59,6 @@ Use the minimal synthetic notebook only when you want the smallest dependency pa
 /_tutorials/scanpy_pbmc_quickstart
 /_tutorials/pbmc_model_comparison
 /_tutorials/pbmc_classification
+/_tutorials/custom_model_extension
 /_tutorials/synthetic_smoke
 ```

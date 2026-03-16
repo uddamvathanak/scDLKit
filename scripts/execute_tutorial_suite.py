@@ -66,6 +66,17 @@ TUTORIAL_SPECS = (
         ),
     ),
     TutorialSpec(
+        name="custom_model_extension",
+        source=ROOT / "examples" / "custom_model_extension.ipynb",
+        executed_stem="custom_model_extension",
+        required_artifacts=(
+            ROOT / "artifacts" / "custom_model_extension" / "report.md",
+            ROOT / "artifacts" / "custom_model_extension" / "report.csv",
+            ROOT / "artifacts" / "custom_model_extension" / "loss_curve.png",
+            ROOT / "artifacts" / "custom_model_extension" / "latent_umap.png",
+        ),
+    ),
+    TutorialSpec(
         name="synthetic_smoke",
         source=ROOT / "examples" / "first_run_synthetic.ipynb",
         executed_stem="first_run_synthetic",
