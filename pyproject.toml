@@ -42,6 +42,7 @@ dependencies = [
 notebook = ["jupyter>=1.0"]
 scanpy = ["scanpy>=1.10"]
 tutorials = [
+  "igraph>=0.11",
   "jupyter>=1.0",
   "scanpy>=1.10",
 ]

@@ -6,8 +6,12 @@ import os
 import shutil
 from pathlib import Path
 
-import gdown
 from platformdirs import user_cache_dir
+
+try:
+    import gdown
+except ImportError:  # pragma: no cover - exercised in minimal-install CI
+    gdown = None
 
 DEFAULT_SCGPT_CHECKPOINT = "whole-human"
 REQUIRED_CHECKPOINT_FILES = ("args.json", "best_model.pt", "vocab.json")
@@ -95,6 +99,13 @@ def ensure_scgpt_checkpoint(
     if download_dir.exists():
         shutil.rmtree(download_dir)
     download_dir.mkdir(parents=True, exist_ok=True)
+
+    if gdown is None:
+        msg = (
+            "gdown is required to download scGPT checkpoints. "
+            "Install scdlkit with the foundation extra: `pip install \"scdlkit[foundation]\"`."
+        )
+        raise ImportError(msg)
 
     downloaded_files = gdown.download_folder(
         id=checkpoint_info["folder_id"],
