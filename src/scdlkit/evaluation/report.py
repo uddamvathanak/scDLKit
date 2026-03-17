@@ -13,7 +13,20 @@ def _scalar_metrics(metrics: dict[str, Any]) -> dict[str, float]:
 
 
 def save_metrics_table(metrics: dict[str, Any], path: str | Path) -> Path:
-    """Write scalar metrics to CSV."""
+    """Write scalar metrics to CSV.
+
+    Parameters
+    ----------
+    metrics
+        Metrics dictionary that may contain scalar and structured values.
+    path
+        CSV output path.
+
+    Returns
+    -------
+    pathlib.Path
+        The written CSV path.
+    """
 
     output = Path(path)
     frame = pd.DataFrame([_scalar_metrics(metrics)])
@@ -28,7 +41,24 @@ def save_markdown_report(
     title: str,
     extra_sections: list[str] | None = None,
 ) -> Path:
-    """Write a markdown report with scalar and structured metrics."""
+    """Write a Markdown report with scalar and structured metrics.
+
+    Parameters
+    ----------
+    metrics
+        Metrics dictionary to serialize.
+    path
+        Markdown output path.
+    title
+        Report title rendered as the first heading.
+    extra_sections
+        Optional additional Markdown lines appended after the metrics section.
+
+    Returns
+    -------
+    pathlib.Path
+        The written Markdown report path.
+    """
 
     output = Path(path)
     lines = [f"# {title}", "", "## Metrics", ""]

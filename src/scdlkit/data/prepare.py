@@ -115,7 +115,51 @@ def prepare_data(
     random_state: int = 42,
     copy: bool = True,
 ) -> PreparedData:
-    """Prepare AnnData splits and preprocessing metadata."""
+    """Prepare AnnData splits and preprocessing metadata.
+
+    Parameters
+    ----------
+    adata
+        Input AnnData object.
+    layer
+        Matrix layer to read. ``"X"`` uses ``adata.X``.
+    use_hvg
+        Whether to run Scanpy highly-variable-gene selection.
+    n_top_genes
+        Number of genes retained when ``use_hvg=True``.
+    normalize
+        Whether to run Scanpy total-count normalization.
+    log1p
+        Whether to run Scanpy ``log1p`` transformation.
+    scale
+        Whether to standardize features.
+    label_key
+        Observation column used for labels and supervised metrics.
+    batch_key
+        Observation column used for batch-aware splitting and optional metrics.
+    val_size
+        Validation split fraction.
+    test_size
+        Test split fraction.
+    batch_aware_split
+        Whether to keep batch groups together when splitting.
+    random_state
+        Random seed used for deterministic splits.
+    copy
+        Whether to copy the input AnnData before preprocessing.
+
+    Returns
+    -------
+    PreparedData
+        Prepared train/validation/test splits plus preprocessing metadata.
+
+    Raises
+    ------
+    ValueError
+        If requested label or batch columns are missing.
+    ImportError
+        If Scanpy-backed preprocessing is requested without the scanpy extra.
+    """
 
     working = adata.copy() if copy else adata
     working, x_matrix, feature_names, scaler = _prepare_matrix(
@@ -217,7 +261,31 @@ def transform_adata(
     batch_encoder: dict[str, int] | None = None,
     copy: bool = True,
 ) -> SplitData:
-    """Transform new AnnData using stored preprocessing metadata."""
+    """Transform new AnnData with previously stored preprocessing metadata.
+
+    Parameters
+    ----------
+    adata
+        New AnnData object to transform.
+    preprocessing
+        Metadata emitted by :func:`prepare_data`.
+    label_encoder
+        Optional fitted label mapping from :func:`prepare_data`.
+    batch_encoder
+        Optional fitted batch mapping from :func:`prepare_data`.
+    copy
+        Whether to copy the AnnData before transformation.
+
+    Returns
+    -------
+    SplitData
+        A transformed dataset that can be passed to scDLKit inference utilities.
+
+    Raises
+    ------
+    ValueError
+        If required features are missing or unseen labels are encountered.
+    """
 
     working = adata.copy() if copy else adata
     working, x_matrix, _, _ = _prepare_matrix(

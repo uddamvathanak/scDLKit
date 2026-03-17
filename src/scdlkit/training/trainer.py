@@ -19,7 +19,35 @@ from scdlkit.utils import resolve_device, set_seed
 
 
 class Trainer:
-    """Train scDLKit models with a task adapter."""
+    """Train or run inference with a scDLKit task adapter.
+
+    `Trainer` is the lower-level stable entry point for users who want more
+    control than :class:`scdlkit.runner.TaskRunner` provides. It accepts an
+    already-constructed model, a task adapter, and split objects or datasets.
+
+    Parameters
+    ----------
+    model
+        PyTorch module or scDLKit-compatible wrapped model.
+    task
+        Task name or instantiated task adapter.
+    epochs
+        Maximum number of training epochs.
+    batch_size
+        Batch size for training and inference.
+    lr
+        Optimizer learning rate.
+    device
+        ``"auto"``, ``"cpu"``, or ``"cuda"``.
+    mixed_precision
+        Enable AMP on CUDA when supported.
+    early_stopping_patience
+        Number of epochs without improvement before stopping early.
+    checkpoint
+        Whether to retain and restore the best checkpointed model state.
+    seed
+        Random seed used for training.
+    """
 
     def __init__(
         self,
@@ -58,6 +86,9 @@ class Trainer:
             raise ValueError(msg)
         self.model.to(self.device)
 
+    def _to_device(self, batch: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+        return {key: value.to(self.device) for key, value in batch.items()}
+
     @staticmethod
     def _coerce_dataset(
         dataset: SplitData | Dataset[dict[str, torch.Tensor]],
@@ -71,7 +102,32 @@ class Trainer:
         train_data: SplitData | Dataset[dict[str, torch.Tensor]],
         val_data: SplitData | Dataset[dict[str, torch.Tensor]] | None = None,
     ) -> Trainer:
-        """Train the model and restore the best checkpointed state."""
+        """Train the model and restore the best checkpointed state.
+
+        Parameters
+        ----------
+        train_data
+            Training split or dataset.
+        val_data
+            Optional validation split or dataset.
+
+        Returns
+        -------
+        Trainer
+            The fitted trainer.
+
+        Raises
+        ------
+        NotImplementedError
+            If the model is inference-only.
+        """
+
+        if getattr(self.model, "supports_training", True) is False:
+            msg = (
+                f"Model '{self.model.__class__.__name__}' is inference-only and does not "
+                "support Trainer.fit()."
+            )
+            raise NotImplementedError(msg)
 
         set_seed(self.seed)
         train_dataset = self._coerce_dataset(train_data)
@@ -129,7 +185,7 @@ class Trainer:
         totals: dict[str, float] = {}
         num_batches = 0
         for batch in loader:
-            device_batch = {key: value.to(self.device) for key, value in batch.items()}
+            device_batch = self._to_device(batch)
             context = torch.autocast(
                 device_type=self.device.type,
                 enabled=self.mixed_precision,
@@ -147,7 +203,20 @@ class Trainer:
         return {key: value / max(num_batches, 1) for key, value in totals.items()}
 
     def predict_dataset(self, data: SplitData | Dataset[dict[str, torch.Tensor]]) -> dict[str, Any]:
-        """Run inference on a dataset and collect batched outputs."""
+        """Run inference on a dataset and collect batched outputs.
+
+        Parameters
+        ----------
+        data
+            Prepared split or dataset that yields batch dictionaries.
+
+        Returns
+        -------
+        dict[str, Any]
+            Concatenated prediction outputs. Common keys include ``latent``,
+            ``reconstruction``, ``logits``, ``x``, ``y``, and ``batch``,
+            depending on the model and task.
+        """
 
         dataset = self._coerce_dataset(data)
         loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=False)
@@ -155,11 +224,16 @@ class Trainer:
         predictions: dict[str, list[torch.Tensor]] = {}
         with torch.inference_mode():
             for batch in loader:
-                device_batch = {key: value.to(self.device) for key, value in batch.items()}
-                outputs = self.model(device_batch["x"])
+                device_batch = self._to_device(batch)
+                predict_batch = getattr(self.model, "predict_batch", None)
+                if callable(predict_batch):
+                    outputs = predict_batch(device_batch)
+                else:
+                    outputs = self.model(device_batch["x"])
                 for key, value in outputs.items():
                     predictions.setdefault(key, []).append(value.detach().cpu())
-                predictions.setdefault("x", []).append(device_batch["x"].detach().cpu())
+                if "x" in device_batch:
+                    predictions.setdefault("x", []).append(device_batch["x"].detach().cpu())
                 if "y" in device_batch:
                     predictions.setdefault("y", []).append(device_batch["y"].detach().cpu())
                 if "batch" in device_batch:
@@ -168,12 +242,23 @@ class Trainer:
 
     @property
     def history_frame(self) -> pd.DataFrame:
-        """Training history as a DataFrame."""
+        """Return the training history as a DataFrame."""
 
         return pd.DataFrame(self.history_)
 
     def save_checkpoint(self, path: str | Path) -> Path:
-        """Persist the best model checkpoint to disk."""
+        """Persist the best model checkpoint to disk.
+
+        Parameters
+        ----------
+        path
+            Destination path for the serialized model state.
+
+        Returns
+        -------
+        pathlib.Path
+            The written checkpoint path.
+        """
 
         if self.best_state_dict_ is None:
             msg = "No checkpoint is available. Train the model first."

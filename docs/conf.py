@@ -36,6 +36,7 @@ exclude_patterns = [
 ]
 
 autosummary_generate = True
+autoclass_content = "both"
 autodoc_typehints = "description"
 autodoc_default_options = {
     "members": True,

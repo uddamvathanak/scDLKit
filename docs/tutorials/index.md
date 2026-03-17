@@ -2,7 +2,9 @@
 
 The tutorial path is intentionally Scanpy-first and model-focused.
 
-Start with Scanpy for the dataset object and downstream neighborhood analysis, then use scDLKit for training, evaluation, and model comparison.
+The goal is not to replace Scanpy’s preprocessing tutorials. The goal is to show where scDLKit enters the workflow, what outputs it creates, and how those outputs move back into normal Scanpy analysis.
+
+## Core path
 
 ````{grid} 1 2 2 2
 :gutter: 2
@@ -11,54 +13,154 @@ Start with Scanpy for the dataset object and downstream neighborhood analysis, t
 :link: /_tutorials/scanpy_pbmc_quickstart
 :link-type: doc
 
-Learn the main scDLKit workflow on `pbmc3k_processed`, then store the latent representation in `adata.obsm` for Scanpy analysis. This notebook ships with a `quickstart` profile and a longer `full` profile.
+Audience:
+Researchers and analysts starting the main baseline workflow.
+
+Question answered:
+How do I train a first model and get an embedding back into `adata.obsm`?
+
+Outputs:
+Latent embedding, report, loss curve, latent UMAP.
 ```
+
+```{grid-item-card} Downstream Scanpy after scDLKit
+:link: /_tutorials/downstream_scanpy_after_scdlkit
+:link-type: doc
+
+Audience:
+Readers who want the missing interpretation layer after the embedding step.
+
+Question answered:
+What should I do in Scanpy after scDLKit has produced an embedding?
+
+Outputs:
+Latent UMAP, Leiden UMAP, marker dotplot, ranked markers, downstream report.
+```
+````
+
+## Validation path
+
+````{grid} 1 2 2 2
+:gutter: 2
 
 ```{grid-item-card} PBMC model comparison
 :link: /_tutorials/pbmc_model_comparison
 :link-type: doc
 
-Compare `PCA`, AutoEncoder, VAE, and Transformer AE baselines on the same PBMC workflow.
+Audience:
+Users deciding whether a deeper baseline is worth it.
+
+Question answered:
+Does `PCA` already solve enough of the problem, or does a deeper model buy useful structure?
+
+Outputs:
+Benchmark CSV, comparison figure, PCA reference UMAP, best baseline UMAP.
 ```
+
+```{grid-item-card} Reconstruction sanity check
+:link: /_tutorials/reconstruction_sanity_pbmc
+:link-type: doc
+
+Audience:
+Users who need to inspect predicted or reconstructed gene-expression values.
+
+Question answered:
+How do I retrieve reconstructed expression, and what is a reasonable sanity check for it?
+
+Outputs:
+Report, loss curve, reconstruction scatter, gene-panel reconstruction summary.
+```
+````
+
+## Extension path
+
+````{grid} 1 2 2 2
+:gutter: 2
 
 ```{grid-item-card} PBMC classification
 :link: /_tutorials/pbmc_classification
 :link-type: doc
 
-Run the classification baseline and inspect accuracy, macro F1, and a confusion matrix.
+Audience:
+Users who want a simple supervised baseline.
+
+Question answered:
+What does a lightweight classifier baseline look like in the same toolkit?
+
+Outputs:
+Report, loss curve, confusion matrix.
 ```
 
 ```{grid-item-card} Custom model extension
 :link: /_tutorials/custom_model_extension
 :link-type: doc
 
-Wrap a raw PyTorch autoencoder with the adapter layer, train it through `Trainer`, and continue with Scanpy on the learned latent space.
+Audience:
+Users bringing their own PyTorch module.
+
+Question answered:
+How do I validate a wrapped custom model inside scDLKit before building on top of it?
+
+Outputs:
+Report, loss curve, latent UMAP.
 ```
+
+```{grid-item-card} Experimental scGPT PBMC embeddings
+:link: /_tutorials/scgpt_pbmc_embeddings
+:link-type: doc
+
+Audience:
+Users who want an experimental foundation-model reference.
+
+Question answered:
+How do I extract frozen scGPT embeddings and return them to Scanpy?
+
+Outputs:
+Report, latent UMAP, frozen linear-probe confusion matrix, embedding summary.
+```
+````
+
+## Fallback path
+
+````{grid} 1 1 1 1
+:gutter: 2
 
 ```{grid-item-card} Synthetic smoke tutorial
 :link: /_tutorials/synthetic_smoke
 :link-type: doc
 
-Use the minimal synthetic notebook only when you want the smallest dependency path or a smoke run.
+Audience:
+Users who want the smallest possible end-to-end example.
+
+Question answered:
+Can I smoke-test the basic workflow with minimal setup?
+
+Outputs:
+Report, loss curve, latent PCA.
 ```
 ````
 
-## Learning order
+## Recommended order
 
 1. Scanpy PBMC quickstart
-2. Re-run the PBMC quickstart in `full` mode when you want a longer baseline fit
+2. Downstream Scanpy after scDLKit
 3. PBMC model comparison
-4. PBMC classification
-5. Custom model extension
-6. Synthetic smoke tutorial
+4. Reconstruction sanity check
+5. PBMC classification
+6. Custom model extension
+7. Experimental scGPT PBMC embeddings
+8. Synthetic smoke tutorial
 
 ```{toctree}
 :hidden:
 :maxdepth: 1
 
 /_tutorials/scanpy_pbmc_quickstart
+/_tutorials/downstream_scanpy_after_scdlkit
 /_tutorials/pbmc_model_comparison
+/_tutorials/reconstruction_sanity_pbmc
 /_tutorials/pbmc_classification
 /_tutorials/custom_model_extension
+/_tutorials/scgpt_pbmc_embeddings
 /_tutorials/synthetic_smoke
 ```

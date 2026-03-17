@@ -53,8 +53,24 @@ Available extras:
 - `scdlkit[notebook]`
 - `scdlkit[scanpy]`
 - `scdlkit[tutorials]`
+- `scdlkit[foundation]`
 - `scdlkit[dev]`
 - `scdlkit[docs]`
+
+## Experimental foundation-model install
+
+For the frozen scGPT embedding pilot, install the foundation extra:
+
+```bash
+python -m pip install "scdlkit[foundation,tutorials]"
+```
+
+Current experimental scope:
+
+- official `whole-human` checkpoint only
+- human scRNA-seq only
+- embedding extraction only
+- no fine-tuning yet
 
 ## First command to run
 

@@ -44,6 +44,19 @@ TUTORIAL_SPECS = (
         ),
     ),
     TutorialSpec(
+        name="downstream_scanpy_after_scdlkit",
+        source=ROOT / "examples" / "downstream_scanpy_after_scdlkit.ipynb",
+        executed_stem="downstream_scanpy_after_scdlkit",
+        required_artifacts=(
+            ROOT / "artifacts" / "downstream_scanpy_after_scdlkit" / "report.md",
+            ROOT / "artifacts" / "downstream_scanpy_after_scdlkit" / "report.csv",
+            ROOT / "artifacts" / "downstream_scanpy_after_scdlkit" / "latent_umap.png",
+            ROOT / "artifacts" / "downstream_scanpy_after_scdlkit" / "leiden_umap.png",
+            ROOT / "artifacts" / "downstream_scanpy_after_scdlkit" / "marker_dotplot.png",
+            ROOT / "artifacts" / "downstream_scanpy_after_scdlkit" / "rank_genes_groups.csv",
+        ),
+    ),
+    TutorialSpec(
         name="pbmc_model_comparison",
         source=ROOT / "examples" / "compare_models_pbmc.ipynb",
         executed_stem="pbmc_model_comparison",
@@ -52,6 +65,18 @@ TUTORIAL_SPECS = (
             ROOT / "artifacts" / "pbmc_compare" / "benchmark_comparison.png",
             ROOT / "artifacts" / "pbmc_compare" / "pca_reference_umap.png",
             ROOT / "artifacts" / "pbmc_compare" / "best_baseline_umap.png",
+        ),
+    ),
+    TutorialSpec(
+        name="reconstruction_sanity_pbmc",
+        source=ROOT / "examples" / "reconstruction_sanity_pbmc.ipynb",
+        executed_stem="reconstruction_sanity_pbmc",
+        required_artifacts=(
+            ROOT / "artifacts" / "reconstruction_sanity_pbmc" / "report.md",
+            ROOT / "artifacts" / "reconstruction_sanity_pbmc" / "report.csv",
+            ROOT / "artifacts" / "reconstruction_sanity_pbmc" / "loss_curve.png",
+            ROOT / "artifacts" / "reconstruction_sanity_pbmc" / "reconstruction_scatter.png",
+            ROOT / "artifacts" / "reconstruction_sanity_pbmc" / "gene_panel_reconstruction.png",
         ),
     ),
     TutorialSpec(
@@ -74,6 +99,18 @@ TUTORIAL_SPECS = (
             ROOT / "artifacts" / "custom_model_extension" / "report.csv",
             ROOT / "artifacts" / "custom_model_extension" / "loss_curve.png",
             ROOT / "artifacts" / "custom_model_extension" / "latent_umap.png",
+        ),
+    ),
+    TutorialSpec(
+        name="scgpt_pbmc_embeddings",
+        source=ROOT / "examples" / "scgpt_pbmc_embeddings.ipynb",
+        executed_stem="scgpt_pbmc_embeddings",
+        required_artifacts=(
+            ROOT / "artifacts" / "scgpt_pbmc_embeddings" / "report.md",
+            ROOT / "artifacts" / "scgpt_pbmc_embeddings" / "report.csv",
+            ROOT / "artifacts" / "scgpt_pbmc_embeddings" / "latent_umap.png",
+            ROOT / "artifacts" / "scgpt_pbmc_embeddings" / "linear_probe_confusion_matrix.png",
+            ROOT / "artifacts" / "scgpt_pbmc_embeddings" / "embedding_summary.json",
         ),
     ),
     TutorialSpec(

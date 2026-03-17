@@ -28,16 +28,19 @@ def _tutorial_summary(*, passed: bool = True, runtime_passed: bool = True) -> di
         "passed": passed,
         "notebooks": [
             {"name": "scanpy_pbmc_quickstart"},
+            {"name": "downstream_scanpy_after_scdlkit"},
             {"name": "pbmc_model_comparison"},
+            {"name": "reconstruction_sanity_pbmc"},
             {"name": "pbmc_classification"},
             {"name": "custom_model_extension"},
+            {"name": "scgpt_pbmc_embeddings"},
             {"name": "synthetic_smoke"},
         ],
         "runtime": {
             "total_sec": 120.0,
             "budget_sec": 480.0,
             "passed": runtime_passed,
-            "notebook_count": 5,
+            "notebook_count": 8,
         },
         "artifact_checks": {
             "passed": passed,
@@ -55,8 +58,15 @@ def _metrics_frame(
     pearson: tuple[float, float, float] = (0.22, 0.24, 0.21),
     accuracy: float = 0.91,
     macro_f1: float = 0.86,
+    scgpt_pbmc_probe_macro_f1: float = 0.93,
+    scgpt_pbmc_probe_accuracy: float = 0.94,
+    scgpt_pbmc_silhouette: float = 0.18,
+    scgpt_pbmc68k_probe_macro_f1: float = 0.81,
+    scgpt_pbmc68k_probe_accuracy: float = 0.82,
+    scgpt_pbmc68k_silhouette: float = 0.16,
     include_paul15: bool = True,
     include_transformer: bool = True,
+    include_scgpt: bool = True,
 ) -> pd.DataFrame:
     rows = []
     rows.append(
@@ -69,6 +79,9 @@ def _metrics_frame(
             "artifact_dir": str(
                 _make_artifact_dir(tmp_path, ("report.md", "report.csv", "latent_umap.png"))
             ),
+            "silhouette": 0.17,
+            "probe_accuracy": 0.92,
+            "probe_macro_f1": 0.90,
         }
     )
     rows.append(
@@ -120,6 +133,75 @@ def _metrics_frame(
                 "knn_label_consistency": knn[index],
                 "pearson": pearson[index],
             }
+        )
+    if include_scgpt:
+        rows.extend(
+            [
+                {
+                    "dataset": "pbmc3k_processed",
+                    "task": "foundation",
+                    "model": "pca_foundation",
+                    "seed": 42,
+                    "runtime_sec": 0.3,
+                    "artifact_dir": str(
+                        _make_artifact_dir(
+                            tmp_path,
+                            ("report.md", "report.csv", "latent_umap.png"),
+                        )
+                    ),
+                    "silhouette": 0.16,
+                    "probe_accuracy": 0.92,
+                    "probe_macro_f1": 0.90,
+                },
+                {
+                    "dataset": "pbmc3k_processed",
+                    "task": "foundation",
+                    "model": "scgpt_whole_human",
+                    "seed": 42,
+                    "runtime_sec": 9.0,
+                    "artifact_dir": str(
+                        _make_artifact_dir(
+                            tmp_path,
+                            ("report.md", "report.csv", "latent_umap.png"),
+                        )
+                    ),
+                    "silhouette": scgpt_pbmc_silhouette,
+                    "probe_accuracy": scgpt_pbmc_probe_accuracy,
+                    "probe_macro_f1": scgpt_pbmc_probe_macro_f1,
+                },
+                {
+                    "dataset": "pbmc68k_reduced",
+                    "task": "foundation",
+                    "model": "pca_foundation",
+                    "seed": 42,
+                    "runtime_sec": 0.3,
+                    "artifact_dir": str(
+                        _make_artifact_dir(
+                            tmp_path,
+                            ("report.md", "report.csv", "latent_umap.png"),
+                        )
+                    ),
+                    "silhouette": 0.15,
+                    "probe_accuracy": 0.80,
+                    "probe_macro_f1": 0.79,
+                },
+                {
+                    "dataset": "pbmc68k_reduced",
+                    "task": "foundation",
+                    "model": "scgpt_whole_human",
+                    "seed": 42,
+                    "runtime_sec": 11.0,
+                    "artifact_dir": str(
+                        _make_artifact_dir(
+                            tmp_path,
+                            ("report.md", "report.csv", "latent_umap.png"),
+                        )
+                    ),
+                    "silhouette": scgpt_pbmc68k_silhouette,
+                    "probe_accuracy": scgpt_pbmc68k_probe_accuracy,
+                    "probe_macro_f1": scgpt_pbmc68k_probe_macro_f1,
+                },
+            ]
         )
     rows.append(
         {
@@ -252,6 +334,12 @@ def test_quality_gates_fail_for_regression_metrics(tmp_path: Path) -> None:
             pearson=(0.08, 0.10, 0.09),
             accuracy=0.72,
             macro_f1=0.68,
+            scgpt_pbmc_probe_macro_f1=0.84,
+            scgpt_pbmc_probe_accuracy=0.86,
+            scgpt_pbmc_silhouette=0.10,
+            scgpt_pbmc68k_probe_macro_f1=0.75,
+            scgpt_pbmc68k_probe_accuracy=0.76,
+            scgpt_pbmc68k_silhouette=0.11,
         ),
         profile="ci",
         tutorial_summary=_tutorial_summary(),
@@ -271,3 +359,13 @@ def test_markdown_summary_includes_runtime_and_artifact_sections(tmp_path: Path)
     assert "## Runtime" in markdown
     assert "## Artifact checks" in markdown
     assert "Release RC ready" in markdown
+
+
+def test_missing_scgpt_run_blocks_release_readiness(tmp_path: Path) -> None:
+    summary = quality_suite.build_summary(
+        _metrics_frame(tmp_path, include_scgpt=False),
+        profile="ci",
+        tutorial_summary=_tutorial_summary(),
+    )
+    assert summary["benchmark_ready"] is False
+    assert any("scgpt_whole_human" in missing for missing in summary["missing_runs"])
