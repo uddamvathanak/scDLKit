@@ -10,6 +10,8 @@ import pytest
 import torch
 from anndata import AnnData
 
+pytest.importorskip("gdown")
+
 from scdlkit.evaluation import evaluate_predictions
 from scdlkit.foundation import (
     ensure_scgpt_checkpoint,
