@@ -45,6 +45,11 @@ tutorials = [
   "jupyter>=1.0",
   "scanpy>=1.10",
 ]
+foundation = [
+  "gdown>=5.2",
+  "platformdirs>=4.3",
+  "scanpy>=1.10",
+]
 dev = [
   "build>=1.2",
   "mypy>=1.9",
@@ -83,6 +88,11 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+exclude = [
+  "docs/_build",
+  "output",
+  "tmp",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "N", "S", "C4", "SIM"]

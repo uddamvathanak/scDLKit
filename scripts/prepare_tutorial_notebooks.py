@@ -16,9 +16,14 @@ STATIC_DIR = DOCS_DIR / "_static"
 
 NOTEBOOK_MAP = {
     "scanpy_pbmc_quickstart.ipynb": ROOT / "examples" / "train_vae_pbmc.ipynb",
+    "downstream_scanpy_after_scdlkit.ipynb": (
+        ROOT / "examples" / "downstream_scanpy_after_scdlkit.ipynb"
+    ),
     "pbmc_model_comparison.ipynb": ROOT / "examples" / "compare_models_pbmc.ipynb",
+    "reconstruction_sanity_pbmc.ipynb": ROOT / "examples" / "reconstruction_sanity_pbmc.ipynb",
     "pbmc_classification.ipynb": ROOT / "examples" / "classification_demo.ipynb",
     "custom_model_extension.ipynb": ROOT / "examples" / "custom_model_extension.ipynb",
+    "scgpt_pbmc_embeddings.ipynb": ROOT / "examples" / "scgpt_pbmc_embeddings.ipynb",
     "synthetic_smoke.ipynb": ROOT / "examples" / "first_run_synthetic.ipynb",
 }
 

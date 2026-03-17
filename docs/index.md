@@ -2,56 +2,109 @@
 
 AnnData-native deep-learning baselines for single-cell workflows.
 
-scDLKit is designed to sit alongside Scanpy, not replace it. Use Scanpy for loading and exploratory single-cell analysis, then use scDLKit to train, compare, and evaluate baseline deep-learning models with a small, reproducible API.
+scDLKit is designed to sit alongside Scanpy, not replace it. The intended flow is:
+
+1. use Scanpy to load and manage the dataset
+2. use scDLKit to train or compare a model
+3. write embeddings back into `adata.obsm`
+4. continue with clustering, visualization, and interpretation in Scanpy
+
+## Quickstart-first
+
+The first workflow should be obvious:
+
+```python
+import scanpy as sc
+from scdlkit import TaskRunner
+
+adata = sc.datasets.pbmc3k_processed()
+
+runner = TaskRunner(
+    model="vae",
+    task="representation",
+    label_key="louvain",
+    device="auto",
+    epochs=20,
+    batch_size=128,
+    model_kwargs={"kl_weight": 1e-3},
+)
+
+runner.fit(adata)
+adata.obsm["X_scdlkit_vae"] = runner.encode(adata)
+```
+
+Then return to Scanpy:
+
+```python
+sc.pp.neighbors(adata, use_rep="X_scdlkit_vae")
+sc.tl.umap(adata)
+sc.pl.umap(adata, color="louvain")
+```
+
+For reconstruction-capable models, scDLKit can also expose predicted or reconstructed expression values directly:
+
+```python
+reconstructed = runner.reconstruct(adata)
+```
+
+## Learning path
+
+Follow this order if you want the tutorial set to build up like a coherent workflow rather than a pile of notebooks:
+
+1. [Scanpy PBMC quickstart](/_tutorials/scanpy_pbmc_quickstart)
+2. [Downstream Scanpy after scDLKit](/_tutorials/downstream_scanpy_after_scdlkit)
+3. [PBMC model comparison](/_tutorials/pbmc_model_comparison)
+4. [Reconstruction sanity check](/_tutorials/reconstruction_sanity_pbmc)
+5. [PBMC classification](/_tutorials/pbmc_classification)
+6. [Custom model extension](/_tutorials/custom_model_extension)
+7. [Experimental scGPT PBMC embeddings](/_tutorials/scgpt_pbmc_embeddings)
+8. [Synthetic smoke tutorial](/_tutorials/synthetic_smoke)
 
 ````{grid} 1 2 2 2
 :gutter: 3
 
-```{grid-item-card} Install
-:link: install
-:link-type: doc
-
-Set up the CPU or GPU tutorial path from PyPI, including the new `tutorials` extra.
-```
-
-```{grid-item-card} Scanpy PBMC quickstart
+```{grid-item-card} Start Here
 :link: _tutorials/scanpy_pbmc_quickstart
 :link-type: doc
 
-Start with the primary notebook tutorial built on `scanpy.datasets.pbmc3k_processed()`.
+Train the baseline VAE, save the embedding into `adata.obsm`, and keep the rest of the workflow in Scanpy.
 ```
 
-```{grid-item-card} Tutorials
-:link: tutorials/index
+```{grid-item-card} Interpret the embedding
+:link: _tutorials/downstream_scanpy_after_scdlkit
 :link-type: doc
 
-Open the notebook walkthroughs for representation learning, model comparison, classification, and custom-model prototyping.
+Take the learned embedding through neighbors, UMAP, Leiden, marker ranking, and a careful coarse annotation pass.
 ```
 
-```{grid-item-card} Scanpy integration
+```{grid-item-card} Validate the baselines
+:link: _tutorials/pbmc_model_comparison
+:link-type: doc
+
+Compare `PCA`, AutoEncoder, VAE, and Transformer AE before deciding whether a deeper model is buying anything useful.
+```
+
+```{grid-item-card} Inspect reconstructed expression
+:link: _tutorials/reconstruction_sanity_pbmc
+:link-type: doc
+
+Use a dedicated reconstruction tutorial to inspect predicted or reconstructed gene-expression outputs without overloading the main quickstart.
+```
+
+```{grid-item-card} API reference
+:link: api/index
+:link-type: doc
+
+Start with the public workflow APIs first, then drop into lower-level, custom-model, and experimental surfaces as needed.
+```
+
+```{grid-item-card} Scanpy integration map
 :link: guides/scanpy-integration
 :link-type: doc
 
-See how to store scDLKit latent embeddings in `adata.obsm` and continue with standard Scanpy analysis.
-```
-
-```{grid-item-card} Custom models
-:link: guides/custom-models
-:link-type: doc
-
-Wrap a raw PyTorch module and train it through `Trainer` when you need a custom baseline outside the built-in registry.
+See what Scanpy still owns, what scDLKit adds, and how the two tutorial ecosystems fit together.
 ```
 ````
-
-## Why scDLKit
-
-- AnnData-native model training and evaluation
-- baseline-first deep-learning workflows for single-cell data
-- one shared CPU/GPU path with `device="auto"`
-- reproducible reports, plots, and tutorial notebooks
-- clean separation between model workflows and Scanpy analysis
-- release hardening driven by built-in benchmark gates before defaults change
-- gene-expression scope first, while defaults and tutorials are still being hardened
 
 ## Example outputs
 
@@ -61,27 +114,24 @@ Wrap a raw PyTorch module and train it through `Trainer` when you need a custom 
 Latent UMAP from the Scanpy PBMC quickstart. A healthy quickstart run should separate the major PBMC populations into broad regions rather than collapsing into a single mixed cloud.
 ```
 
-```{figure} _static/first_run_latent_pca.png
-:alt: Latent PCA from the synthetic smoke example
-
-Latent embedding produced by the first end-to-end scDLKit walkthrough.
-```
-
 ```{figure} _static/pbmc_benchmark_comparison.png
 :alt: PBMC comparison plot from the benchmark tutorial
 
 Benchmark comparison chart from the PBMC model-comparison tutorial.
 ```
 
-## Recommended learning path
+```{figure} _static/first_run_latent_pca.png
+:alt: Latent PCA from the synthetic smoke example
 
-1. Install the tutorial dependencies from PyPI.
-2. Run the Scanpy PBMC quickstart notebook in the default `quickstart` profile.
-3. Switch that notebook to the `full` profile when you want a longer run and stronger qualitative separation.
-4. Continue with the model comparison notebook, which treats `PCA` as the classical reference baseline.
-5. Use the classification notebook once you want a supervised baseline.
-6. Move to the custom-model tutorial when you want to prototype your own `nn.Module` through `Trainer`.
-7. Keep the synthetic notebook only as a minimal smoke or fallback path.
+Minimal smoke-path latent embedding produced by the fallback synthetic walkthrough.
+```
+
+## Positioning
+
+- Scanpy still owns raw-data preprocessing, QC, and most exploratory analysis.
+- scDLKit owns the model-training, evaluation, comparison, and output-handoff layer.
+- The main public scope is still gene-expression-first.
+- Experimental foundation-model content remains clearly separated from the stable beginner path.
 
 ```{toctree}
 :hidden:
@@ -94,6 +144,7 @@ guides/data
 guides/models
 guides/training
 guides/custom-models
+guides/foundation-models
 guides/evaluation
 guides/visualization
 guides/comparison

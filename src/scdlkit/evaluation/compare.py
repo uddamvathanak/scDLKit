@@ -14,7 +14,17 @@ from scdlkit.utils import ensure_directory
 
 @dataclass(slots=True)
 class BenchmarkResult:
-    """Collected results from comparing multiple models."""
+    """Collected results from comparing multiple models.
+
+    Attributes
+    ----------
+    metrics_frame
+        Tabular metrics summary with one row per compared model.
+    runners
+        Fitted :class:`scdlkit.runner.TaskRunner` objects keyed by model name.
+    output_paths
+        Optional output artifact paths when ``output_dir`` was provided.
+    """
 
     metrics_frame: pd.DataFrame
     runners: dict[str, Any]
@@ -29,7 +39,26 @@ def compare_models(
     shared_kwargs: dict[str, Any] | None = None,
     output_dir: str | None = None,
 ) -> BenchmarkResult:
-    """Train and evaluate several models with shared configuration."""
+    """Train and evaluate several models with shared configuration.
+
+    Parameters
+    ----------
+    adata
+        AnnData-like object passed to every compared run.
+    models
+        Built-in model names to compare.
+    task
+        Task name shared across all compared models.
+    shared_kwargs
+        Keyword arguments forwarded to each :class:`scdlkit.runner.TaskRunner`.
+    output_dir
+        Optional directory for CSV, Markdown, and comparison-plot artifacts.
+
+    Returns
+    -------
+    BenchmarkResult
+        Metrics table, fitted runners, and optional artifact paths.
+    """
 
     from scdlkit.runner import TaskRunner
     from scdlkit.visualization.compare import plot_model_comparison

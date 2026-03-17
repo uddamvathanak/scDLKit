@@ -38,6 +38,8 @@ def test_taskrunner_representation_workflow(dense_adata, tmp_path: Path) -> None
     runner.plot_losses()
     runner.plot_latent(method="pca", color="label")
     runner.plot_reconstruction()
+    reconstructed = runner.reconstruct(dense_adata)
+    assert reconstructed.shape[0] == dense_adata.n_obs
     report_path = runner.save_report(tmp_path / "report.md")
     assert report_path.exists()
     assert report_path.with_suffix(".csv").exists()
@@ -57,6 +59,12 @@ def test_taskrunner_classification_workflow(dense_adata) -> None:
     assert "accuracy" in metrics
     assert "confusion_matrix" in metrics
     runner.plot_confusion_matrix()
+    try:
+        runner.reconstruct(dense_adata)
+    except ValueError as exc:
+        assert "reconstructed expression" in str(exc)
+    else:
+        raise AssertionError("Classification runner should not support reconstruct().")
 
 
 def test_compare_models_writes_outputs(dense_adata, tmp_path: Path) -> None:

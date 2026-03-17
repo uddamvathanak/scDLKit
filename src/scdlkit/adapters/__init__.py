@@ -1,4 +1,9 @@
-"""Adapter utilities for wrapping custom PyTorch modules."""
+"""Public adapter helpers for custom PyTorch modules.
+
+Use this namespace when you already have an ``nn.Module`` and want to train or
+evaluate it through scDLKit's low-level :class:`~scdlkit.training.trainer.Trainer`
+workflow without registering it as a built-in model.
+"""
 
 from scdlkit.adapters.base import TorchModuleAdapter
 from scdlkit.adapters.classification import (

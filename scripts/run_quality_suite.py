@@ -19,6 +19,7 @@ from anndata import AnnData
 from scipy import sparse
 from sklearn.decomposition import PCA
 from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -35,6 +36,8 @@ QUALITY_GATES: dict[str, float] = {
     "pbmc_vae_silhouette_std_max": 0.05,
     "pbmc_classifier_accuracy_min": 0.85,
     "pbmc_classifier_macro_f1_min": 0.80,
+    "scgpt_vs_pca_max_drop": 0.02,
+    "scgpt_silhouette_win": 0.01,
 }
 
 RUNTIME_BUDGETS: dict[str, dict[str, float]] = {
@@ -72,6 +75,16 @@ PROFILE_DEFAULTS: dict[str, dict[str, dict[str, dict[str, tuple[int, ...]]]]] = 
                 "logistic_regression_pca": (42,),
             },
         },
+        "foundation": {
+            "pbmc3k_processed": {
+                "pca_foundation": (42,),
+                "scgpt_whole_human": (42,),
+            },
+            "pbmc68k_reduced": {
+                "pca_foundation": (42,),
+                "scgpt_whole_human": (42,),
+            },
+        },
     },
     "full": {
         "representation": {
@@ -97,14 +110,27 @@ PROFILE_DEFAULTS: dict[str, dict[str, dict[str, dict[str, tuple[int, ...]]]]] = 
                 "logistic_regression_pca": (42, 52, 62),
             },
         },
+        "foundation": {
+            "pbmc3k_processed": {
+                "pca_foundation": (42,),
+                "scgpt_whole_human": (42,),
+            },
+            "pbmc68k_reduced": {
+                "pca_foundation": (42,),
+                "scgpt_whole_human": (42,),
+            },
+        },
     },
 }
 
 REQUIRED_TUTORIAL_NAMES = (
     "scanpy_pbmc_quickstart",
+    "downstream_scanpy_after_scdlkit",
     "pbmc_model_comparison",
+    "reconstruction_sanity_pbmc",
     "pbmc_classification",
     "custom_model_extension",
+    "scgpt_pbmc_embeddings",
     "synthetic_smoke",
 )
 
@@ -118,6 +144,7 @@ class DatasetSpec:
 
 DATASET_SPECS: dict[str, DatasetSpec] = {
     "pbmc3k_processed": DatasetSpec(name="pbmc3k_processed", label_key="louvain"),
+    "pbmc68k_reduced": DatasetSpec(name="pbmc68k_reduced", label_key="bulk_labels"),
     "paul15": DatasetSpec(name="paul15", label_key="paul15_clusters"),
     "moignard15": DatasetSpec(name="moignard15", label_key="exp_groups"),
 }
@@ -178,6 +205,8 @@ def _load_dataset(name: str) -> tuple[AnnData, DatasetSpec]:
     if name == "pbmc3k_processed":
         data_path = ROOT / "examples" / "data" / "pbmc3k_processed.h5ad"
         adata = sc.read_h5ad(data_path) if data_path.exists() else sc.datasets.pbmc3k_processed()
+    elif name == "pbmc68k_reduced":
+        adata = sc.datasets.pbmc68k_reduced()
     elif name == "paul15":
         adata = sc.datasets.paul15()
     elif name == "moignard15":
@@ -229,6 +258,46 @@ def _encode_obs(values: pd.Series) -> tuple[np.ndarray, list[str]]:
     return encoded.codes.astype(int), list(encoded.categories)
 
 
+def _linear_probe_metrics(
+    latent: np.ndarray,
+    labels: np.ndarray | None,
+    *,
+    seed: int,
+) -> dict[str, float | list[list[int]]]:
+    from scdlkit.evaluation.metrics import classification_metrics
+
+    if labels is None or len(np.unique(labels)) < 2:
+        return {}
+    _, counts = np.unique(labels, return_counts=True)
+    stratify = labels if int(counts.min()) >= 2 else None
+    train_x, test_x, train_y, test_y = train_test_split(
+        latent,
+        labels,
+        test_size=0.2,
+        random_state=seed,
+        stratify=stratify,
+    )
+    classifier = LogisticRegression(max_iter=1000, random_state=seed)
+    classifier.fit(train_x, train_y)
+    logits = classifier.predict_proba(test_x)
+    metrics = classification_metrics(test_y, logits)
+    return {
+        "probe_accuracy": float(metrics["accuracy"]),
+        "probe_macro_f1": float(metrics["macro_f1"]),
+        "probe_confusion_matrix": metrics["confusion_matrix"],
+    }
+
+
+def _write_report(output_dir: Path, title: str, bullets: dict[str, Any]) -> None:
+    report_lines = [f"# {title}", ""]
+    report_lines.extend(f"- `{key}`: `{value}`" for key, value in bullets.items())
+    (output_dir / "report.md").write_text("\n".join(report_lines) + "\n", encoding="utf-8")
+
+
+def _scalar_metrics(metrics: dict[str, Any]) -> dict[str, float]:
+    return {key: value for key, value in metrics.items() if isinstance(value, (int, float))}
+
+
 def _iter_profile_runs(profile: str) -> list[tuple[str, str, str, int]]:
     runs: list[tuple[str, str, str, int]] = []
     profile_config = PROFILE_DEFAULTS[profile]
@@ -258,6 +327,26 @@ def _runner_kwargs(model_name: str, profile: str) -> dict[str, Any]:
         return {"epochs": 15 if profile == "ci" else 30, "batch_size": 128}
     msg = f"Unsupported runner model '{model_name}'."
     raise ValueError(msg)
+
+
+def _subset_adata_for_foundation(
+    adata: AnnData,
+    *,
+    label_key: str,
+    seed: int,
+    max_cells: int = 128,
+) -> AnnData:
+    if adata.n_obs <= max_cells:
+        return adata.copy()
+    indices = np.arange(adata.n_obs)
+    labels, _ = _encode_obs(adata.obs[label_key])
+    keep_indices, _ = train_test_split(
+        indices,
+        train_size=max_cells,
+        random_state=seed,
+        stratify=labels,
+    )
+    return adata[np.sort(keep_indices)].copy()
 
 
 def _save_loss_curve(runner: Any, output_dir: Path) -> None:
@@ -360,15 +449,17 @@ def run_pca_baseline(
     runtime_sec = perf_counter() - started_at
     metrics = reconstruction_metrics(x_matrix, reconstruction)
     metrics.update(representation_metrics(latent, labels, batches))
-    report_lines = [
-        "# PCA baseline report",
-        "",
-        f"- Dataset: `{dataset_name}`",
-        f"- Components: `{n_pcs}`",
-        "",
-    ]
-    report_lines.extend(f"- `{key}`: `{value:.4f}`" for key, value in metrics.items())
-    (output_dir / "report.md").write_text("\n".join(report_lines) + "\n", encoding="utf-8")
+    metrics.update(_linear_probe_metrics(latent, labels, seed=seed))
+    report_metrics = {
+        "Dataset": dataset_name,
+        "Components": n_pcs,
+        **{
+            key: f"{value:.4f}" if isinstance(value, float) else value
+            for key, value in metrics.items()
+            if key != "probe_confusion_matrix"
+        },
+    }
+    _write_report(output_dir, "PCA baseline report", report_metrics)
     pd.DataFrame([metrics]).to_csv(output_dir / "report.csv", index=False)
     _save_scanpy_umap(adata, latent, label_key, output_dir / "latent_umap.png", seed=seed)
     return {
@@ -380,7 +471,136 @@ def run_pca_baseline(
         "runtime_sec": runtime_sec,
         "peak_memory_mb": _process_peak_memory_mb(),
         "artifact_dir": str(output_dir),
-        **metrics,
+        **_scalar_metrics(metrics),
+    }
+
+
+def run_foundation_pca_reference(
+    *,
+    dataset_name: str,
+    adata: AnnData,
+    label_key: str,
+    batch_key: str | None,
+    seed: int,
+    output_root: Path,
+) -> dict[str, Any]:
+    from scdlkit.evaluation.metrics import representation_metrics
+
+    output_dir = (
+        output_root / dataset_name / "foundation" / "pca_foundation" / f"seed_{seed}"
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+    subset = _subset_adata_for_foundation(adata, label_key=label_key, seed=seed)
+    x_matrix = _to_dense(subset.X)
+    labels, _ = _encode_obs(subset.obs[label_key])
+    batches = None
+    if batch_key is not None and batch_key in subset.obs:
+        batches, _ = _encode_obs(subset.obs[batch_key])
+    n_components = min(32, x_matrix.shape[0] - 1, x_matrix.shape[1])
+    started_at = perf_counter()
+    pca = PCA(n_components=n_components, random_state=seed)
+    latent = pca.fit_transform(x_matrix)
+    runtime_sec = perf_counter() - started_at
+    metrics = representation_metrics(latent, labels, batches)
+    metrics.update(_linear_probe_metrics(latent, labels, seed=seed))
+    report_metrics = {
+        "Dataset": dataset_name,
+        "Reference model": "PCA",
+        "Cells": subset.n_obs,
+        **{
+            key: f"{value:.4f}" if isinstance(value, float) else value
+            for key, value in metrics.items()
+            if key != "probe_confusion_matrix"
+        },
+    }
+    _write_report(output_dir, "Foundation reference PCA report", report_metrics)
+    pd.DataFrame([metrics]).to_csv(output_dir / "report.csv", index=False)
+    _save_scanpy_umap(subset, latent, label_key, output_dir / "latent_umap.png", seed=seed)
+    return {
+        "dataset": dataset_name,
+        "task": "foundation",
+        "model": "pca_foundation",
+        "seed": seed,
+        "profile": "foundation",
+        "runtime_sec": runtime_sec,
+        "peak_memory_mb": _process_peak_memory_mb(),
+        "artifact_dir": str(output_dir),
+        **_scalar_metrics(metrics),
+    }
+
+
+def run_scgpt_embedding_baseline(
+    *,
+    dataset_name: str,
+    adata: AnnData,
+    label_key: str,
+    batch_key: str | None,
+    seed: int,
+    output_root: Path,
+) -> dict[str, Any]:
+    from scdlkit.evaluation.metrics import representation_metrics
+    from scdlkit.foundation import load_scgpt_model, prepare_scgpt_data
+    from scdlkit.training import Trainer
+
+    output_dir = (
+        output_root
+        / dataset_name
+        / "foundation"
+        / "scgpt_whole_human"
+        / f"seed_{seed}"
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+    subset = _subset_adata_for_foundation(adata, label_key=label_key, seed=seed)
+    prepared = prepare_scgpt_data(
+        subset,
+        checkpoint="whole-human",
+        label_key=label_key,
+        batch_size=64,
+        use_raw=True,
+    )
+    model = load_scgpt_model("whole-human", device="auto")
+    trainer = Trainer(
+        model=model,
+        task="representation",
+        batch_size=prepared.batch_size,
+        device="auto",
+        epochs=1,
+    )
+    started_at = perf_counter()
+    predictions = trainer.predict_dataset(prepared.dataset)
+    runtime_sec = perf_counter() - started_at
+    latent = np.asarray(predictions["latent"], dtype="float32")
+    labels = predictions.get("y")
+    batches = None
+    if batch_key is not None and batch_key in subset.obs:
+        batches, _ = _encode_obs(subset.obs[batch_key])
+    metrics = representation_metrics(latent, labels, batches)
+    metrics.update(_linear_probe_metrics(latent, labels, seed=seed))
+    report_metrics = {
+        "Dataset": dataset_name,
+        "Checkpoint": "whole-human",
+        "Matched genes": prepared.num_genes_matched,
+        "Cells": subset.n_obs,
+        **{
+            key: f"{value:.4f}" if isinstance(value, float) else value
+            for key, value in metrics.items()
+            if key != "probe_confusion_matrix"
+        },
+    }
+    _write_report(output_dir, "scGPT frozen embedding report", report_metrics)
+    pd.DataFrame([metrics]).to_csv(output_dir / "report.csv", index=False)
+    _save_scanpy_umap(subset, latent, label_key, output_dir / "latent_umap.png", seed=seed)
+    return {
+        "dataset": dataset_name,
+        "task": "foundation",
+        "model": "scgpt_whole_human",
+        "seed": seed,
+        "profile": "foundation",
+        "runtime_sec": runtime_sec,
+        "peak_memory_mb": _process_peak_memory_mb(),
+        "artifact_dir": str(output_dir),
+        "num_genes_matched": prepared.num_genes_matched,
+        **_scalar_metrics(metrics),
     }
 
 
@@ -521,7 +741,9 @@ def aggregate_metrics(metrics_frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def _required_benchmark_artifacts(task: str, model: str) -> tuple[str, ...]:
-    if task == "representation" and model == "pca":
+    if task == "foundation":
+        return ("report.md", "report.csv", "latent_umap.png")
+    if task == "representation" and model in {"pca", "scgpt_whole_human"}:
         return ("report.md", "report.csv", "latent_umap.png")
     if task == "representation":
         return ("report.md", "report.csv", "loss_curve.png", "latent_umap.png")
@@ -675,6 +897,40 @@ def evaluate_quality_gates(metrics_frame: pd.DataFrame) -> list[str]:
                 f"{QUALITY_GATES['pbmc_classifier_macro_f1_min']:.2f} "
                 f"(observed {macro_f1:.3f})."
             )
+
+    foundation_datasets = ("pbmc3k_processed", "pbmc68k_reduced")
+    winning_datasets = 0
+    for dataset_name in foundation_datasets:
+        pca_rows = metrics_frame[
+            (metrics_frame["dataset"] == dataset_name)
+            & (metrics_frame["task"] == "foundation")
+            & (metrics_frame["model"] == "pca_foundation")
+        ]
+        scgpt_rows = metrics_frame[
+            (metrics_frame["dataset"] == dataset_name)
+            & (metrics_frame["task"] == "foundation")
+            & (metrics_frame["model"] == "scgpt_whole_human")
+        ]
+        if pca_rows.empty or scgpt_rows.empty:
+            issues.append(f"Foundation benchmark for '{dataset_name}' is incomplete.")
+            continue
+        for metric_name in ("silhouette",):
+            pca_value = float(pca_rows[metric_name].mean())
+            scgpt_value = float(scgpt_rows[metric_name].mean())
+            if scgpt_value < pca_value - QUALITY_GATES["scgpt_vs_pca_max_drop"]:
+                issues.append(
+                    f"scGPT underperformed PCA on {dataset_name} {metric_name} by more than "
+                    f"{QUALITY_GATES['scgpt_vs_pca_max_drop']:.2f} "
+                    f"(PCA {pca_value:.3f}, scGPT {scgpt_value:.3f})."
+                )
+        if float(scgpt_rows["silhouette"].mean()) >= float(
+            pca_rows["silhouette"].mean()
+        ) + QUALITY_GATES["scgpt_silhouette_win"]:
+            winning_datasets += 1
+    if winning_datasets == 0:
+        issues.append(
+            "scGPT did not show a silhouette improvement over PCA on either PBMC dataset."
+        )
     return issues
 
 
@@ -930,6 +1186,8 @@ def render_summary_markdown(summary: dict[str, Any]) -> str:
             "pearson_mean",
             "accuracy_mean",
             "macro_f1_mean",
+            "probe_accuracy_mean",
+            "probe_macro_f1_mean",
             "runtime_sec_mean",
         )
         for metric in metric_names:
@@ -947,8 +1205,12 @@ def render_summary_markdown(summary: dict[str, Any]) -> str:
             "## Notes",
             "",
             "- `pbmc3k_processed` is the primary release-quality representation benchmark.",
+            "- `pbmc68k_reduced` is the experimental foundation-model comparison benchmark.",
             "- `paul15` is the secondary built-in benchmark for checking dataset sensitivity.",
             "- `PCA` is the classical reference baseline for asking whether deep learning helps.",
+            "- `pca_foundation` is the subset-matched PCA reference for scGPT comparisons.",
+            "- `scgpt_whole_human` is the experimental frozen embedding baseline for "
+            "human PBMC data.",
             "- `transformer_ae` uses a compact CPU-friendly configuration in the quality suite: "
             "`patch_size=48`, `d_model=64`, `n_heads=2`, `n_layers=1`.",
         ]
@@ -1006,6 +1268,17 @@ def run_quality_suite(*, profile: str, output_dir: Path) -> pd.DataFrame:
                             output_root=output_dir,
                         )
                     )
+                elif model_name == "scgpt_whole_human":
+                    records.append(
+                        run_scgpt_embedding_baseline(
+                            dataset_name=dataset_name,
+                            adata=adata,
+                            label_key=spec.label_key,
+                            batch_key=spec.batch_key,
+                            seed=seed,
+                            output_root=output_dir,
+                        )
+                    )
                 else:
                     records.append(
                         run_representation_runner(
@@ -1041,6 +1314,33 @@ def run_quality_suite(*, profile: str, output_dir: Path) -> pd.DataFrame:
                             dataset_name=dataset_name,
                             adata=adata,
                             label_key=spec.label_key,
+                            seed=seed,
+                            output_root=output_dir,
+                        )
+                    )
+
+    for dataset_name, model_seeds in profile_config.get("foundation", {}).items():
+        adata, spec = _load_dataset(dataset_name)
+        for model_name, seeds in model_seeds.items():
+            for seed in seeds:
+                if model_name == "pca_foundation":
+                    records.append(
+                        run_foundation_pca_reference(
+                            dataset_name=dataset_name,
+                            adata=adata,
+                            label_key=spec.label_key,
+                            batch_key=spec.batch_key,
+                            seed=seed,
+                            output_root=output_dir,
+                        )
+                    )
+                else:
+                    records.append(
+                        run_scgpt_embedding_baseline(
+                            dataset_name=dataset_name,
+                            adata=adata,
+                            label_key=spec.label_key,
+                            batch_key=spec.batch_key,
                             seed=seed,
                             output_root=output_dir,
                         )

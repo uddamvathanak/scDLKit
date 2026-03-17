@@ -7,6 +7,7 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  SCDLKIT_CACHE_DIR: ${{ github.workspace }}/.cache/scdlkit
 
 jobs:
   linux-quality:
@@ -24,7 +25,7 @@ jobs:
       - name: Install package
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e .[dev]
+          python -m pip install -e .[dev,foundation]
       - name: Ruff
         run: ruff check .
       - name: Mypy
@@ -77,10 +78,15 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
+      - name: Restore scGPT checkpoint cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.SCDLKIT_CACHE_DIR }}
+          key: scgpt-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
       - name: Install package and tutorial dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e .[dev,tutorials]
+          python -m pip install -e .[dev,tutorials,foundation]
       - name: Execute tutorial suite and validate artifacts
         run: python scripts/execute_tutorial_suite.py --profile ci --check
       - name: Upload tutorial artifacts
@@ -89,6 +95,37 @@ jobs:
         with:
           name: tutorial-smoke-ubuntu
           path: artifacts
+
+  foundation-smoke:
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Restore scGPT checkpoint cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.SCDLKIT_CACHE_DIR }}
+          key: scgpt-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+      - name: Install package and foundation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[dev,foundation,tutorials]
+      - name: Run foundation smoke
+        run: python scripts/run_foundation_smoke.py
+      - name: Upload foundation smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: foundation-smoke-${{ matrix.os }}
+          path: artifacts/foundation_smoke
 
   quality-regression:
     runs-on: ubuntu-latest
@@ -100,10 +137,15 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
+      - name: Restore scGPT checkpoint cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.SCDLKIT_CACHE_DIR }}
+          key: scgpt-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
       - name: Install package and benchmark dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e .[dev,tutorials]
+          python -m pip install -e .[dev,tutorials,foundation]
       - name: Download tutorial smoke artifacts
         uses: actions/download-artifact@v4
         with:

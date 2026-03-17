@@ -25,7 +25,94 @@ from scdlkit.visualization import (
 
 
 class TaskRunner:
-    """Beginner-facing training, evaluation, and visualization workflow."""
+    """Beginner-facing training, evaluation, and visualization workflow.
+
+    `TaskRunner` is the highest-level stable entry point in scDLKit. It owns the
+    common AnnData workflow:
+
+    1. prepare and split an :class:`~anndata.AnnData`
+    2. create or accept a model
+    3. train with a task adapter
+    4. evaluate and visualize outputs
+    5. hand embeddings or reconstructions back to the user
+
+    Parameters
+    ----------
+    model
+        Built-in model name or an instantiated scDLKit model.
+    task
+        One of ``"representation"``, ``"reconstruction"``, or ``"classification"``.
+    latent_dim
+        Latent dimensionality for encoder-based built-in models.
+    hidden_dims
+        Hidden-layer sizes for built-in feed-forward models.
+    epochs
+        Maximum number of training epochs.
+    batch_size
+        Training and inference batch size.
+    lr
+        Optimizer learning rate.
+    device
+        ``"auto"``, ``"cpu"``, or ``"cuda"``.
+    mixed_precision
+        Enable AMP on CUDA when supported.
+    early_stopping_patience
+        Number of epochs without improvement before stopping early.
+    checkpoint
+        Whether to keep and restore the best validation checkpoint.
+    seed
+        Random seed used during training.
+    layer
+        AnnData matrix layer to read. ``"X"`` uses ``adata.X``.
+    use_hvg
+        Whether to select highly variable genes during preparation.
+    n_top_genes
+        Number of highly variable genes to retain when ``use_hvg=True``.
+    normalize
+        Whether to run Scanpy total-count normalization.
+    log1p
+        Whether to run Scanpy ``log1p`` transformation.
+    scale
+        Whether to standardize features.
+    label_key
+        Observation column used for labels and evaluation.
+    batch_key
+        Observation column used for batch-aware splitting and optional metrics.
+    val_size
+        Validation split fraction.
+    test_size
+        Test split fraction.
+    batch_aware_split
+        Whether to keep batch groups together when splitting.
+    random_state
+        Random state for deterministic data splitting.
+    output_dir
+        Optional directory for saved checkpoints and reports.
+    model_kwargs
+        Extra keyword arguments forwarded to built-in model construction.
+
+    Notes
+    -----
+    Use :class:`scdlkit.training.Trainer` directly when you need lower-level
+    control or when wrapping a custom module with the adapter APIs.
+
+    Examples
+    --------
+    >>> import scanpy as sc
+    >>> from scdlkit import TaskRunner
+    >>> adata = sc.datasets.pbmc3k_processed()
+    >>> runner = TaskRunner(
+    ...     model="vae",
+    ...     task="representation",
+    ...     label_key="louvain",
+    ...     device="auto",
+    ...     epochs=20,
+    ...     batch_size=128,
+    ...     model_kwargs={"kl_weight": 1e-3},
+    ... )
+    >>> runner.fit(adata)
+    >>> latent = runner.encode(adata)
+    """
 
     def __init__(
         self,
@@ -135,7 +222,22 @@ class TaskRunner:
         val_adata: AnnData | None = None,
         test_adata: AnnData | None = None,
     ) -> TaskRunner:
-        """Prepare data, instantiate the model, and train it."""
+        """Prepare data, instantiate the model, and train it.
+
+        Parameters
+        ----------
+        adata
+            Primary AnnData used to create train, validation, and test splits.
+        val_adata
+            Optional external validation split prepared with the same preprocessing.
+        test_adata
+            Optional external test split prepared with the same preprocessing.
+
+        Returns
+        -------
+        TaskRunner
+            The fitted runner.
+        """
 
         prepared = prepare_data(adata, **self.prepare_kwargs)
         if val_adata is not None:
@@ -169,7 +271,20 @@ class TaskRunner:
         return self.trainer_.predict_dataset(split)
 
     def evaluate(self, adata: AnnData | None = None) -> dict[str, Any]:
-        """Evaluate on held-out test data or on a provided AnnData object."""
+        """Evaluate the current model on a held-out split or a provided AnnData object.
+
+        Parameters
+        ----------
+        adata
+            Optional AnnData to transform and evaluate. When omitted, the runner
+            evaluates the test split, then validation split, then train split.
+
+        Returns
+        -------
+        dict[str, Any]
+            Task-specific metrics such as reconstruction, representation, or
+            classification scores.
+        """
 
         if self.prepared_data_ is None:
             msg = "TaskRunner must be fit before evaluation."
@@ -183,15 +298,75 @@ class TaskRunner:
         return self.metrics_
 
     def predict(self, adata: AnnData) -> np.ndarray:
-        """Run prediction on new AnnData."""
+        """Run task-dependent prediction on new AnnData.
+
+        Parameters
+        ----------
+        adata
+            AnnData object to transform and run through the fitted model.
+
+        Returns
+        -------
+        numpy.ndarray
+            For classification tasks, class predictions. For reconstruction-capable
+            tasks, reconstructed expression values.
+
+        Notes
+        -----
+        This method is intentionally backward compatible, but its return type is
+        task-dependent. For reconstruction-capable models, prefer
+        :meth:`reconstruct` in new tutorials and user-facing code.
+        """
 
         predictions = self._run_predictions(self._prepare_for_inference(adata))
         if self.task_name == "classification":
             return predictions["logits"].argmax(axis=1)
         return predictions["reconstruction"]
 
+    def reconstruct(self, adata: AnnData) -> np.ndarray:
+        """Return reconstructed or predicted gene-expression values.
+
+        Parameters
+        ----------
+        adata
+            AnnData object to transform and run through the fitted model.
+
+        Returns
+        -------
+        numpy.ndarray
+            Reconstructed expression values for reconstruction-capable models.
+
+        Raises
+        ------
+        ValueError
+            If the fitted task is classification-only and does not expose
+            reconstructed expression outputs.
+        """
+
+        if self.task_name == "classification":
+            msg = "Classification models do not expose reconstructed expression outputs."
+            raise ValueError(msg)
+        predictions = self._run_predictions(self._prepare_for_inference(adata))
+        return predictions["reconstruction"]
+
     def encode(self, adata: AnnData) -> np.ndarray:
-        """Encode new AnnData into latent representations."""
+        """Encode new AnnData into latent representations.
+
+        Parameters
+        ----------
+        adata
+            AnnData object to transform and encode with the fitted model.
+
+        Returns
+        -------
+        numpy.ndarray
+            Latent embedding matrix suitable for storage in ``adata.obsm``.
+
+        Raises
+        ------
+        ValueError
+            If the task does not expose latent encodings.
+        """
 
         if self.task_name == "classification":
             msg = "Classification models do not expose latent encodings in v0.1."
@@ -261,7 +436,18 @@ class TaskRunner:
         return plot_confusion_matrix(confusion, class_names=class_names)
 
     def save_report(self, path: str | Path) -> Path:
-        """Write report markdown and scalar metrics CSV."""
+        """Write a Markdown report and scalar-metric CSV.
+
+        Parameters
+        ----------
+        path
+            Markdown output path. A sibling ``.csv`` file is written next to it.
+
+        Returns
+        -------
+        pathlib.Path
+            The resolved Markdown report path.
+        """
 
         if self.metrics_ is None:
             self.evaluate()

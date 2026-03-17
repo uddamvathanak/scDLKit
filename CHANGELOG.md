@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added `scdlkit.foundation` with an experimental frozen scGPT embedding path for the official `whole-human` checkpoint.
+- Extended `Trainer.predict_dataset(...)` to support batch-aware inference hooks for non-`x` tokenized workflows.
+- Added a real-checkpoint foundation smoke script, an experimental scGPT PBMC notebook, and docs for the new embedding workflow.
+- Extended the quality suite to compare the scGPT pilot against `PCA` on built-in PBMC datasets.
+
 ## 0.1.3
 
 - Added `scdlkit.adapters` with adapter-first support for wrapping custom PyTorch reconstruction and classification modules through `Trainer`.
