@@ -187,6 +187,7 @@ jobs:
       - linux-tutorial-smoke-classic
       - linux-tutorial-smoke-foundation-embeddings
       - linux-tutorial-smoke-foundation-annotation
+      - foundation-smoke
     permissions:
       contents: read
     steps:
@@ -218,6 +219,11 @@ jobs:
         with:
           name: tutorial-smoke-foundation-annotation-ubuntu
           path: downloaded-artifacts/foundation-annotation
+      - name: Download Ubuntu foundation smoke artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: foundation-smoke-ubuntu-latest
+          path: downloaded-artifacts/foundation-smoke
       - name: Merge tutorial summaries
         run: |
           python scripts/merge_tutorial_summaries.py \
@@ -227,7 +233,13 @@ jobs:
               downloaded-artifacts/foundation-annotation/tutorial_validation/summary.json \
             --output downloaded-artifacts/tutorial_validation/summary.json
       - name: Run quality regression suite
-        run: python scripts/run_quality_suite.py --profile ci --tutorial-summary downloaded-artifacts/tutorial_validation/summary.json --check --require-rc
+        run: |
+          python scripts/run_quality_suite.py \
+            --profile ci \
+            --tutorial-summary downloaded-artifacts/tutorial_validation/summary.json \
+            --foundation-annotation-metrics downloaded-artifacts/foundation-smoke/foundation_annotation_smoke/metrics.csv \
+            --check \
+            --require-rc
       - name: Upload quality artifacts
         if: always()
         uses: actions/upload-artifact@v4
