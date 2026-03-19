@@ -216,6 +216,15 @@ def parse_args() -> argparse.Namespace:
         help="Optional tutorial validation summary JSON for RC readiness checks.",
     )
     parser.add_argument(
+        "--foundation-annotation-metrics",
+        type=Path,
+        default=None,
+        help=(
+            "Optional CSV with precomputed scGPT annotation benchmark rows. "
+            "Used in CI to reuse the dedicated annotation smoke results."
+        ),
+    )
+    parser.add_argument(
         "--check",
         action="store_true",
         help="Fail with a non-zero exit code when benchmark gates fail.",
@@ -1781,10 +1790,16 @@ def _write_summary_files(output_dir: Path, summary: dict[str, Any]) -> None:
     (output_dir / "summary.md").write_text(render_summary_markdown(summary), encoding="utf-8")
 
 
-def run_quality_suite(*, profile: str, output_dir: Path) -> pd.DataFrame:
+def run_quality_suite(
+    *,
+    profile: str,
+    output_dir: Path,
+    foundation_annotation_metrics: dict[tuple[str, str, int], dict[str, Any]] | None = None,
+) -> pd.DataFrame:
     output_dir.mkdir(parents=True, exist_ok=True)
     records: list[dict[str, Any]] = []
     profile_config = PROFILE_DEFAULTS[profile]
+    precomputed_annotation_metrics = foundation_annotation_metrics or {}
 
     for dataset_name, model_seeds in profile_config["representation"].items():
         adata, spec = _load_dataset(dataset_name)
@@ -1895,17 +1910,21 @@ def run_quality_suite(*, profile: str, output_dir: Path) -> pd.DataFrame:
                         )
                     )
                 else:
-                    records.append(
-                        run_scgpt_annotation_strategy(
-                            dataset_name=dataset_name,
-                            adata=adata,
-                            label_key=spec.label_key,
-                            seed=seed,
-                            output_root=output_dir,
-                            model_name=model_name,
-                            profile=profile,
+                    precomputed_key = (dataset_name, model_name, seed)
+                    if precomputed_key in precomputed_annotation_metrics:
+                        records.append(dict(precomputed_annotation_metrics[precomputed_key]))
+                    else:
+                        records.append(
+                            run_scgpt_annotation_strategy(
+                                dataset_name=dataset_name,
+                                adata=adata,
+                                label_key=spec.label_key,
+                                seed=seed,
+                                output_root=output_dir,
+                                model_name=model_name,
+                                profile=profile,
+                            )
                         )
-                    )
 
     metrics_frame = pd.DataFrame.from_records(records).sort_values(
         ["dataset", "task", "model", "seed"]
@@ -1921,11 +1940,33 @@ def load_tutorial_summary(path: Path | None) -> dict[str, Any] | None:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def load_foundation_annotation_metrics(
+    path: Path | None,
+) -> dict[tuple[str, str, int], dict[str, Any]]:
+    if path is None or not path.exists():
+        return {}
+    frame = pd.read_csv(path)
+    rows: dict[tuple[str, str, int], dict[str, Any]] = {}
+    for record in frame.to_dict(orient="records"):
+        artifact_dir = Path(str(record["artifact_dir"]))
+        if not artifact_dir.is_absolute():
+            artifact_dir = (path.parent / artifact_dir).resolve()
+        record["artifact_dir"] = str(artifact_dir)
+        rows[(str(record["dataset"]), str(record["model"]), int(record["seed"]))] = record
+    return rows
+
+
 def main() -> None:
     args = parse_args()
     output_dir = args.output_dir or _default_output_dir(args.profile)
     suite_started_at = perf_counter()
-    metrics_frame = run_quality_suite(profile=args.profile, output_dir=output_dir)
+    metrics_frame = run_quality_suite(
+        profile=args.profile,
+        output_dir=output_dir,
+        foundation_annotation_metrics=load_foundation_annotation_metrics(
+            args.foundation_annotation_metrics
+        ),
+    )
     suite_runtime_sec = perf_counter() - suite_started_at
     tutorial_summary = load_tutorial_summary(args.tutorial_summary)
     summary = build_summary(
