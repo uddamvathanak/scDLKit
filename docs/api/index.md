@@ -64,7 +64,7 @@ adata.obsm["X_scdlkit_vae"] = runner.encode(adata)
   - `compare_models`
   - adapter helpers
 - Experimental path:
-  - frozen scGPT embedding helpers under `scdlkit.foundation`
+  - scGPT embedding and annotation-tuning helpers under `scdlkit.foundation`
 
 ```{toctree}
 :hidden:

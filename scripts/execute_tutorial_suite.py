@@ -114,6 +114,24 @@ TUTORIAL_SPECS = (
         ),
     ),
     TutorialSpec(
+        name="scgpt_cell_type_annotation",
+        source=ROOT / "examples" / "scgpt_cell_type_annotation.ipynb",
+        executed_stem="scgpt_cell_type_annotation",
+        required_artifacts=(
+            ROOT / "artifacts" / "scgpt_cell_type_annotation" / "report.md",
+            ROOT / "artifacts" / "scgpt_cell_type_annotation" / "report.csv",
+            ROOT / "artifacts" / "scgpt_cell_type_annotation" / "strategy_metrics.csv",
+            ROOT / "artifacts" / "scgpt_cell_type_annotation" / "frozen_embedding_umap.png",
+            ROOT / "artifacts" / "scgpt_cell_type_annotation" / "lora_embedding_umap.png",
+            (
+                ROOT
+                / "artifacts"
+                / "scgpt_cell_type_annotation"
+                / "best_strategy_confusion_matrix.png"
+            ),
+        ),
+    ),
+    TutorialSpec(
         name="synthetic_smoke",
         source=ROOT / "examples" / "first_run_synthetic.ipynb",
         executed_stem="first_run_synthetic",

@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+from collections.abc import Sized
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
 import torch
 from anndata import AnnData
 from scipy import sparse
-from torch.utils.data import DataLoader, Dataset
+from sklearn.model_selection import train_test_split
+from torch.utils.data import DataLoader, Dataset, Subset
 
 from scdlkit.foundation.cache import DEFAULT_SCGPT_CHECKPOINT
 from scdlkit.foundation.scgpt import GeneVocab, _load_scgpt_assets
@@ -49,12 +51,29 @@ def _bin_row(
 
 @dataclass(frozen=True, slots=True)
 class ScGPTPreparedData:
-    """Tokenized dataset and metadata for frozen scGPT embedding extraction."""
+    """Tokenized dataset and metadata for scGPT workflows."""
 
     dataset: Dataset[dict[str, torch.Tensor]]
     gene_names: tuple[str, ...]
     checkpoint_id: str
     label_key: str | None
+    label_categories: tuple[str, ...] | None
+    batch_size: int
+    num_cells: int
+    num_genes_matched: int
+
+
+@dataclass(frozen=True, slots=True)
+class ScGPTSplitData:
+    """Train, validation, and test datasets for scGPT annotation workflows."""
+
+    train: Dataset[dict[str, torch.Tensor]]
+    val: Dataset[dict[str, torch.Tensor]] | None
+    test: Dataset[dict[str, torch.Tensor]] | None
+    checkpoint_id: str
+    label_key: str | None
+    label_categories: tuple[str, ...] | None
+    gene_names: tuple[str, ...]
     batch_size: int
     num_cells: int
     num_genes_matched: int
@@ -222,14 +241,17 @@ def _validate_expression_values(matrix: Any) -> None:
         raise ValueError(msg)
 
 
-def _encode_labels(adata: AnnData, label_key: str | None) -> np.ndarray | None:
+def _encode_labels(
+    adata: AnnData,
+    label_key: str | None,
+) -> tuple[np.ndarray | None, tuple[str, ...] | None]:
     if label_key is None:
-        return None
+        return None, None
     if label_key not in adata.obs:
         msg = f"Label key '{label_key}' is not present in adata.obs."
         raise ValueError(msg)
     categories = pd.Categorical(adata.obs[label_key].astype(str))
-    return categories.codes.astype(np.int64)
+    return categories.codes.astype(np.int64), tuple(str(value) for value in categories.categories)
 
 
 def _select_expression_adata(adata: AnnData, *, use_raw: bool) -> AnnData:
@@ -282,7 +304,7 @@ def prepare_scgpt_data(
         vocab,
         min_gene_overlap=min_gene_overlap,
     )
-    labels = _encode_labels(adata, label_key)
+    labels, label_categories = _encode_labels(adata, label_key)
     source_dataset = _ScGPTTokenSourceDataset(
         filtered_matrix,
         matched_vocab_ids,
@@ -320,7 +342,128 @@ def prepare_scgpt_data(
         gene_names=gene_names,
         checkpoint_id=checkpoint,
         label_key=label_key,
+        label_categories=label_categories,
         batch_size=batch_size,
         num_cells=int(expression_adata.n_obs),
         num_genes_matched=len(gene_names),
+    )
+
+
+def _labels_for_dataset(dataset: Dataset[dict[str, torch.Tensor]]) -> np.ndarray | None:
+    labels = getattr(dataset, "labels", None)
+    if isinstance(labels, torch.Tensor):
+        return labels.detach().cpu().numpy()
+    return None
+
+
+def _split_with_optional_stratification(
+    indices: np.ndarray,
+    *,
+    labels: np.ndarray | None,
+    split_size: float,
+    random_state: int,
+    stratify: bool,
+) -> tuple[np.ndarray, np.ndarray]:
+    stratify_labels = None
+    if stratify and labels is not None and len(np.unique(labels)) > 1:
+        stratify_labels = labels
+    try:
+        train_idx, holdout_idx = train_test_split(
+            indices,
+            test_size=split_size,
+            random_state=random_state,
+            stratify=stratify_labels,
+        )
+    except ValueError:
+        train_idx, holdout_idx = train_test_split(
+            indices,
+            test_size=split_size,
+            random_state=random_state,
+            stratify=None,
+        )
+    return np.sort(train_idx), np.sort(holdout_idx)
+
+
+def split_scgpt_data(
+    prepared: ScGPTPreparedData,
+    *,
+    val_size: float = 0.15,
+    test_size: float = 0.15,
+    random_state: int = 42,
+    stratify: bool = True,
+) -> ScGPTSplitData:
+    """Split a prepared scGPT dataset into train, validation, and test subsets.
+
+    Parameters
+    ----------
+    prepared
+        Tokenized scGPT dataset returned by :func:`prepare_scgpt_data`.
+    val_size
+        Fraction of cells reserved for validation.
+    test_size
+        Fraction of cells reserved for test evaluation.
+    random_state
+        Random seed used for deterministic splitting.
+    stratify
+        Attempt stratified splitting when labels are available.
+
+    Returns
+    -------
+    ScGPTSplitData
+        Split-aware datasets plus the metadata needed for reporting.
+
+    Raises
+    ------
+    ValueError
+        If the split fractions are invalid.
+    """
+
+    if val_size < 0 or test_size < 0:
+        msg = "val_size and test_size must be non-negative."
+        raise ValueError(msg)
+    if val_size + test_size >= 1.0:
+        msg = "val_size and test_size must sum to less than 1.0."
+        raise ValueError(msg)
+
+    total = len(cast(Sized, prepared.dataset))
+    indices = np.arange(total, dtype=np.int64)
+    labels = _labels_for_dataset(prepared.dataset)
+
+    train_indices = indices
+    val_indices: np.ndarray | None = None
+    test_indices: np.ndarray | None = None
+
+    if test_size > 0.0:
+        remaining, test_indices = _split_with_optional_stratification(
+            train_indices,
+            labels=labels,
+            split_size=test_size,
+            random_state=random_state,
+            stratify=stratify,
+        )
+        train_indices = remaining
+
+    if val_size > 0.0:
+        adjusted_val_size = val_size / (1.0 - test_size)
+        train_labels = labels[train_indices] if labels is not None else None
+        remaining, val_indices = _split_with_optional_stratification(
+            train_indices,
+            labels=train_labels,
+            split_size=adjusted_val_size,
+            random_state=random_state,
+            stratify=stratify,
+        )
+        train_indices = remaining
+
+    return ScGPTSplitData(
+        train=Subset(prepared.dataset, train_indices.tolist()),
+        val=Subset(prepared.dataset, val_indices.tolist()) if val_indices is not None else None,
+        test=Subset(prepared.dataset, test_indices.tolist()) if test_indices is not None else None,
+        checkpoint_id=prepared.checkpoint_id,
+        label_key=prepared.label_key,
+        label_categories=prepared.label_categories,
+        gene_names=prepared.gene_names,
+        batch_size=prepared.batch_size,
+        num_cells=prepared.num_cells,
+        num_genes_matched=prepared.num_genes_matched,
     )

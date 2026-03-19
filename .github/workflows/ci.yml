@@ -119,13 +119,17 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e .[dev,foundation,tutorials]
       - name: Run foundation smoke
-        run: python scripts/run_foundation_smoke.py
+        run: |
+          python scripts/run_foundation_smoke.py
+          python scripts/run_foundation_annotation_smoke.py
       - name: Upload foundation smoke artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: foundation-smoke-${{ matrix.os }}
-          path: artifacts/foundation_smoke
+          path: |
+            artifacts/foundation_smoke
+            artifacts/foundation_annotation_smoke
 
   quality-regression:
     runs-on: ubuntu-latest

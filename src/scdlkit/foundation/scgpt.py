@@ -190,16 +190,8 @@ class ScGPTEmbeddingModel(nn.Module):
         return {"latent": functional.normalize(latent, p=2, dim=1)}
 
 
-def load_scgpt_model(
-    checkpoint: str = DEFAULT_SCGPT_CHECKPOINT,
-    *,
-    device: str = "auto",
-    cache_dir: str | Path | None = None,
-) -> ScGPTEmbeddingModel:
-    """Load a frozen scGPT checkpoint for embedding extraction."""
-
-    checkpoint_dir, config, vocab = _load_scgpt_assets(checkpoint, cache_dir=cache_dir)
-    model = ScGPTBackbone(
+def _build_scgpt_backbone(config: dict[str, Any], vocab: GeneVocab) -> ScGPTBackbone:
+    return ScGPTBackbone(
         ntoken=len(vocab),
         d_model=int(config["embsize"]),
         nhead=int(config["nheads"]),
@@ -208,14 +200,35 @@ def load_scgpt_model(
         dropout=float(config["dropout"]),
         pad_token_id=vocab[str(config["pad_token"])],
     )
+
+
+def _load_scgpt_backbone(
+    checkpoint: str = DEFAULT_SCGPT_CHECKPOINT,
+    *,
+    cache_dir: str | Path | None = None,
+) -> tuple[ScGPTBackbone, dict[str, Any], GeneVocab]:
+    checkpoint_dir, config, vocab = _load_scgpt_assets(checkpoint, cache_dir=cache_dir)
+    backbone = _build_scgpt_backbone(config, vocab)
     state_dict = torch.load(checkpoint_dir / "best_model.pt", map_location="cpu")
     if isinstance(state_dict, dict):
         if "model_state_dict" in state_dict and isinstance(state_dict["model_state_dict"], dict):
             state_dict = state_dict["model_state_dict"]
         elif "state_dict" in state_dict and isinstance(state_dict["state_dict"], dict):
             state_dict = state_dict["state_dict"]
-    _load_pretrained_weights(model, state_dict)
-    model.eval()
+    _load_pretrained_weights(backbone, state_dict)
+    backbone.eval()
+    return backbone, config, vocab
+
+
+def load_scgpt_model(
+    checkpoint: str = DEFAULT_SCGPT_CHECKPOINT,
+    *,
+    device: str = "auto",
+    cache_dir: str | Path | None = None,
+) -> ScGPTEmbeddingModel:
+    """Load a frozen scGPT checkpoint for embedding extraction."""
+
+    model, _, _ = _load_scgpt_backbone(checkpoint, cache_dir=cache_dir)
     resolved_device = resolve_device(device)
     if resolved_device.type != "cuda":
         warnings.filterwarnings(

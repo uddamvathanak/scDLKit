@@ -76,8 +76,9 @@ def representation_metrics(
 
 def classification_metrics(y_true: np.ndarray, logits: np.ndarray) -> dict[str, object]:
     predicted = logits.argmax(axis=1)
+    labels = np.arange(logits.shape[1]) if logits.ndim == 2 else None
     return {
         "accuracy": float(accuracy_score(y_true, predicted)),
         "macro_f1": float(f1_score(y_true, predicted, average="macro")),
-        "confusion_matrix": confusion_matrix(y_true, predicted).tolist(),
+        "confusion_matrix": confusion_matrix(y_true, predicted, labels=labels).tolist(),
     }

@@ -1,15 +1,19 @@
 # Foundation Models
 
-`scDLKit` now includes an experimental scGPT embedding path for human scRNA-seq workflows.
+`scDLKit` now includes an experimental scGPT path for human scRNA-seq workflows.
 
-This first foundation-model release is intentionally narrow:
+The public scope is still deliberately narrow:
 
-- embeddings only
 - official `whole-human` checkpoint only
 - human single-cell RNA only
-- `Trainer.predict_dataset(...)` only
-- no fine-tuning yet
+- `Trainer` plus `scdlkit.foundation` helpers
+- frozen embeddings remain supported
+- experimental cell-type annotation fine-tuning is now supported through:
+  - frozen linear probe
+  - head-only tuning
+  - LoRA tuning
 - no `TaskRunner` support yet
+- no full-backbone fine-tuning yet
 
 ## Install
 
@@ -23,16 +27,15 @@ Use the experimental foundation path when you want to:
 
 - extract frozen cell embeddings from an official scGPT checkpoint
 - compare those embeddings against `PCA` and scDLKit baselines
-- keep the same Scanpy downstream handoff through `adata.obsm`
+- fine-tune scGPT for a labeled cell-type annotation task
+- decide whether your dataset needs:
+  - only frozen embeddings
+  - a trainable classification head
+  - parameter-efficient LoRA tuning
 
-This is the first bridge between the baseline toolkit and later foundation-model adaptation work.
+This is the bridge between the baseline toolkit and later foundation-model adaptation work.
 
-Current validation emphasis:
-
-- release-gating focuses on embedding structure, not on claiming that a frozen linear probe already beats classical baselines
-- frozen probe metrics are still recorded and reported so the foundation path is evaluated honestly
-
-## Public API
+## Frozen embedding API
 
 ```python
 from scdlkit import Trainer
@@ -57,13 +60,79 @@ predictions = trainer.predict_dataset(prepared.dataset)
 adata.obsm["X_scgpt_whole_human"] = predictions["latent"]
 ```
 
+## Annotation fine-tuning API
+
+```python
+from scdlkit import Trainer
+from scdlkit.foundation import (
+    load_scgpt_annotation_model,
+    prepare_scgpt_data,
+    split_scgpt_data,
+)
+
+prepared = prepare_scgpt_data(
+    adata,
+    checkpoint="whole-human",
+    label_key="louvain",
+    batch_size=64,
+)
+split = split_scgpt_data(prepared, val_size=0.15, test_size=0.15, random_state=42)
+
+model = load_scgpt_annotation_model(
+    num_classes=len(prepared.label_categories or ()),
+    checkpoint="whole-human",
+    tuning_strategy="lora",
+    label_categories=prepared.label_categories,
+    device="auto",
+)
+
+trainer = Trainer(
+    model=model,
+    task="classification",
+    batch_size=prepared.batch_size,
+    device="auto",
+    epochs=8,
+)
+trainer.fit(split.train, split.val)
+predictions = trainer.predict_dataset(split.test)
+adata.obsm["X_scgpt_lora"] = predictions["latent"]
+```
+
+## When to use each strategy
+
+- frozen linear probe:
+  - best first question
+  - tells you whether the checkpoint already separates your labels
+- head-only tuning:
+  - cheapest trainable path
+  - use when the frozen probe is useful but not good enough
+- LoRA tuning:
+  - first parameter-efficient adaptation path
+  - use when you want more flexibility than a frozen backbone plus head
+
 ## Current limitations
 
 - input preparation is a separate tokenized pipeline, not `prepare_data(...)`
-- the supported surface is frozen inference, not `Trainer.fit(...)`
-- this release does not include LoRA, PEFT, or checkpoint fine-tuning
-- this release does not include non-human support
+- only the official `whole-human` checkpoint is supported
+- user datasets must have labels for annotation fine-tuning
+- gene overlap with the checkpoint vocabulary still gates compatibility
+- full-backbone fine-tuning is intentionally deferred
+- this release does not claim perturbation, spatial, or multimodal support
 
-## Next step
+## Tutorials
 
-Once the frozen embedding path is stable, the next extension is fine-tuning and adaptation rather than more checkpoint variants.
+- frozen embeddings: [Experimental scGPT PBMC embeddings](/_tutorials/scgpt_pbmc_embeddings)
+- annotation tuning: [Experimental scGPT cell-type annotation](/_tutorials/scgpt_cell_type_annotation)
+
+## Positioning
+
+This feature should be treated as experimental.
+
+The goal is not to claim that foundation models always beat classical baselines. The goal is to give users a reproducible, Scanpy-compatible workflow to compare:
+
+- `PCA + logistic regression`
+- frozen scGPT linear probe
+- head-only tuning
+- LoRA tuning
+
+That comparison story is the main product value of the current foundation release line.

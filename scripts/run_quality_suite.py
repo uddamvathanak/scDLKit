@@ -38,6 +38,12 @@ QUALITY_GATES: dict[str, float] = {
     "pbmc_classifier_macro_f1_min": 0.80,
     "scgpt_vs_pca_max_drop": 0.02,
     "scgpt_silhouette_win": 0.01,
+    "scgpt_annotation_head_accuracy_drop_max": 0.02,
+    "scgpt_annotation_head_macro_f1_drop_max": 0.02,
+    "scgpt_annotation_lora_accuracy_drop_max": 0.02,
+    "scgpt_annotation_lora_macro_f1_drop_max": 0.02,
+    "scgpt_annotation_tuned_accuracy_min": 0.80,
+    "scgpt_annotation_tuned_macro_f1_min": 0.40,
 }
 
 RUNTIME_BUDGETS: dict[str, dict[str, float]] = {
@@ -46,12 +52,20 @@ RUNTIME_BUDGETS: dict[str, dict[str, float]] = {
         "tutorial_total_sec": 480.0,
         "transformer_ae_warn_sec": 15.0,
         "transformer_ae_fail_sec": 25.0,
+        "scgpt_head_warn_sec": 20.0,
+        "scgpt_head_fail_sec": 35.0,
+        "scgpt_lora_warn_sec": 90.0,
+        "scgpt_lora_fail_sec": 120.0,
     },
     "full": {
         "quality_suite_total_sec": 1200.0,
         "tutorial_total_sec": 1200.0,
         "transformer_ae_warn_sec": 30.0,
         "transformer_ae_fail_sec": 60.0,
+        "scgpt_head_warn_sec": 40.0,
+        "scgpt_head_fail_sec": 70.0,
+        "scgpt_lora_warn_sec": 180.0,
+        "scgpt_lora_fail_sec": 240.0,
     },
 }
 
@@ -83,6 +97,14 @@ PROFILE_DEFAULTS: dict[str, dict[str, dict[str, dict[str, tuple[int, ...]]]]] = 
             "pbmc68k_reduced": {
                 "pca_foundation": (42,),
                 "scgpt_whole_human": (42,),
+            },
+        },
+        "foundation_annotation": {
+            "pbmc3k_processed": {
+                "pca_logistic_annotation": (42,),
+                "scgpt_frozen_probe": (42,),
+                "scgpt_head": (42,),
+                "scgpt_lora": (42,),
             },
         },
     },
@@ -120,6 +142,20 @@ PROFILE_DEFAULTS: dict[str, dict[str, dict[str, dict[str, tuple[int, ...]]]]] = 
                 "scgpt_whole_human": (42,),
             },
         },
+        "foundation_annotation": {
+            "pbmc3k_processed": {
+                "pca_logistic_annotation": (42,),
+                "scgpt_frozen_probe": (42,),
+                "scgpt_head": (42,),
+                "scgpt_lora": (42,),
+            },
+            "pbmc68k_reduced": {
+                "pca_logistic_annotation": (42,),
+                "scgpt_frozen_probe": (42,),
+                "scgpt_head": (42,),
+                "scgpt_lora": (42,),
+            },
+        },
     },
 }
 
@@ -131,6 +167,7 @@ REQUIRED_TUTORIAL_NAMES = (
     "pbmc_classification",
     "custom_model_extension",
     "scgpt_pbmc_embeddings",
+    "scgpt_cell_type_annotation",
     "synthetic_smoke",
 )
 
@@ -349,6 +386,22 @@ def _subset_adata_for_foundation(
     return adata[np.sort(keep_indices)].copy()
 
 
+def _subset_foundation_genes(
+    adata: AnnData,
+    *,
+    max_genes: int | None,
+) -> AnnData:
+    if max_genes is None or adata.n_vars <= max_genes:
+        return adata.copy()
+    source = adata.raw.to_adata() if adata.raw is not None else adata.copy()
+    dense = _to_dense(source.X)
+    variances = np.var(dense, axis=0)
+    keep_indices = np.argsort(variances)[-max_genes:]
+    subset = source[:, np.sort(keep_indices)].copy()
+    subset.raw = subset.copy()
+    return subset
+
+
 def _save_loss_curve(runner: Any, output_dir: Path) -> None:
     from matplotlib import pyplot as plt
 
@@ -369,6 +422,57 @@ def _save_confusion_plot(
     confusion_fig, _ = plot_confusion_matrix(confusion, class_names=class_names)
     confusion_fig.savefig(output_dir / "confusion_matrix.png", dpi=150, bbox_inches="tight")
     plt.close(confusion_fig)
+
+
+def _count_trainable_parameters(model: Any) -> int:
+    return int(
+        sum(parameter.numel() for parameter in model.parameters() if parameter.requires_grad)
+    )
+
+
+def _expand_probabilities(
+    probabilities: np.ndarray,
+    classes: np.ndarray | list[int],
+    *,
+    num_classes: int,
+) -> np.ndarray:
+    expanded = np.zeros((probabilities.shape[0], num_classes), dtype=np.float32)
+    class_indices = np.asarray(classes, dtype=int)
+    expanded[:, class_indices] = np.asarray(probabilities, dtype=np.float32)
+    return expanded
+
+
+def _subset_adata_from_dataset(
+    adata: AnnData,
+    dataset: Any,
+) -> AnnData:
+    from torch.utils.data import Subset
+
+    if isinstance(dataset, Subset):
+        return adata[np.asarray(dataset.indices, dtype=int)].copy()
+    return adata.copy()
+
+
+def _classification_split_seed(profile: str) -> int:
+    return 42 if profile == "ci" else 52
+
+
+def _foundation_annotation_profile(profile: str) -> dict[str, int]:
+    if profile == "ci":
+        return {
+            "max_cells": 32,
+            "max_genes": 64,
+            "min_gene_overlap": 32,
+            "head_epochs": 2,
+            "lora_epochs": 1,
+        }
+    return {
+        "max_cells": 64,
+        "max_genes": 128,
+        "min_gene_overlap": 64,
+        "head_epochs": 3,
+        "lora_epochs": 2,
+    }
 
 
 def run_representation_runner(
@@ -686,7 +790,11 @@ def run_logistic_regression_pca(
     test_latent = pca.transform(x_test)
     classifier = LogisticRegression(max_iter=1000, random_state=seed)
     classifier.fit(train_latent, train_split.labels)
-    logits = classifier.predict_proba(test_latent)
+    logits = _expand_probabilities(
+        classifier.predict_proba(test_latent),
+        classifier.classes_,
+        num_classes=len(prepared.label_encoder or []),
+    )
     runtime_sec = perf_counter() - started_at
     metrics = classification_metrics(test_split.labels, logits)
     class_names = list(prepared.label_encoder) if prepared.label_encoder is not None else []
@@ -721,6 +829,261 @@ def run_logistic_regression_pca(
     }
 
 
+def run_foundation_annotation_pca_logistic(
+    *,
+    dataset_name: str,
+    adata: AnnData,
+    label_key: str,
+    seed: int,
+    output_root: Path,
+    profile: str,
+) -> dict[str, Any]:
+    from scdlkit import prepare_data
+    from scdlkit.evaluation.metrics import classification_metrics, representation_metrics
+
+    output_dir = (
+        output_root
+        / dataset_name
+        / "foundation_annotation"
+        / "pca_logistic_annotation"
+        / f"seed_{seed}"
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+    profile_config = _foundation_annotation_profile(profile)
+    annotation_adata = _subset_adata_for_foundation(
+        adata,
+        label_key=label_key,
+        seed=seed,
+        max_cells=profile_config["max_cells"],
+    )
+    annotation_adata = _subset_foundation_genes(
+        annotation_adata,
+        max_genes=profile_config["max_genes"],
+    )
+    prepared = prepare_data(annotation_adata, label_key=label_key, random_state=seed)
+    train_split = prepared.train
+    test_split = prepared.test or prepared.val
+    if test_split is None or train_split.labels is None or test_split.labels is None:
+        msg = "Foundation annotation baseline requires train/test labels."
+        raise RuntimeError(msg)
+
+    x_train = _to_dense(train_split.X)
+    x_test = _to_dense(test_split.X)
+    n_components = min(32, x_train.shape[0] - 1, x_train.shape[1])
+    started_at = perf_counter()
+    pca = PCA(n_components=n_components, random_state=seed)
+    train_latent = pca.fit_transform(x_train)
+    test_latent = pca.transform(x_test)
+    classifier = LogisticRegression(max_iter=1000, random_state=seed)
+    classifier.fit(train_latent, train_split.labels)
+    logits = classifier.predict_proba(test_latent)
+    runtime_sec = perf_counter() - started_at
+
+    metrics = classification_metrics(test_split.labels, logits)
+    metrics.update(representation_metrics(test_latent, test_split.labels, None))
+    confusion = metrics.get("confusion_matrix")
+    class_names = list(prepared.label_encoder) if prepared.label_encoder is not None else []
+    if isinstance(confusion, list):
+        _save_confusion_plot(confusion, class_names, output_dir)
+
+    obs_names = test_split.obs_names
+    test_adata = annotation_adata[obs_names].copy() if obs_names else annotation_adata.copy()
+    _save_scanpy_umap(test_adata, test_latent, label_key, output_dir / "latent_umap.png", seed=seed)
+
+    report_metrics = {
+        "Dataset": dataset_name,
+        "Strategy": "PCA + logistic regression",
+        "Trainable parameters": 0,
+        **{
+            key: f"{value:.4f}" if isinstance(value, float) else value
+            for key, value in metrics.items()
+            if key != "confusion_matrix"
+        },
+    }
+    _write_report(output_dir, "Foundation annotation PCA baseline", report_metrics)
+    pd.DataFrame(
+        [
+            {
+                **metrics,
+                "trainable_parameters": 0,
+                "confusion_matrix_artifact": str(output_dir / "confusion_matrix.png"),
+                "latent_umap_artifact": str(output_dir / "latent_umap.png"),
+            }
+        ]
+    ).to_csv(output_dir / "report.csv", index=False)
+    return {
+        "dataset": dataset_name,
+        "task": "foundation_annotation",
+        "model": "pca_logistic_annotation",
+        "seed": seed,
+        "profile": "foundation_annotation",
+        "runtime_sec": runtime_sec,
+        "peak_memory_mb": _process_peak_memory_mb(),
+        "artifact_dir": str(output_dir),
+        "trainable_parameters": 0,
+        **_scalar_metrics(metrics),
+    }
+
+
+def run_scgpt_annotation_strategy(
+    *,
+    dataset_name: str,
+    adata: AnnData,
+    label_key: str,
+    seed: int,
+    output_root: Path,
+    model_name: str,
+    profile: str,
+) -> dict[str, Any]:
+    from scdlkit.evaluation.metrics import classification_metrics, representation_metrics
+    from scdlkit.foundation import (
+        ScGPTLoRAConfig,
+        load_scgpt_annotation_model,
+        load_scgpt_model,
+        prepare_scgpt_data,
+        split_scgpt_data,
+    )
+    from scdlkit.training import Trainer
+
+    output_dir = output_root / dataset_name / "foundation_annotation" / model_name / f"seed_{seed}"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    profile_config = _foundation_annotation_profile(profile)
+    annotation_adata = _subset_adata_for_foundation(
+        adata,
+        label_key=label_key,
+        seed=seed,
+        max_cells=profile_config["max_cells"],
+    )
+    annotation_adata = _subset_foundation_genes(
+        annotation_adata,
+        max_genes=profile_config["max_genes"],
+    )
+    prepared = prepare_scgpt_data(
+        annotation_adata,
+        checkpoint="whole-human",
+        label_key=label_key,
+        batch_size=64,
+        use_raw=True,
+        min_gene_overlap=profile_config["min_gene_overlap"],
+    )
+    split = split_scgpt_data(prepared, val_size=0.15, test_size=0.15, random_state=seed)
+    test_dataset = split.test or split.val or split.train
+    test_adata = _subset_adata_from_dataset(annotation_adata, test_dataset)
+    label_categories = list(prepared.label_categories or [])
+
+    started_at = perf_counter()
+    if model_name == "scgpt_frozen_probe":
+        model = load_scgpt_model("whole-human", device="auto")
+        trainer = Trainer(
+            model=model,
+            task="representation",
+            batch_size=prepared.batch_size,
+            device="auto",
+            epochs=1,
+        )
+        train_predictions = trainer.predict_dataset(split.train)
+        test_predictions = trainer.predict_dataset(test_dataset)
+        classifier = LogisticRegression(max_iter=1000, random_state=seed)
+        classifier.fit(train_predictions["latent"], train_predictions["y"])
+        logits = _expand_probabilities(
+            classifier.predict_proba(test_predictions["latent"]),
+            classifier.classes_,
+            num_classes=len(label_categories),
+        )
+        predictions = {
+            "logits": logits,
+            "latent": test_predictions["latent"],
+            "y": test_predictions["y"],
+        }
+        trainable_parameters = 0
+    else:
+        tuning_strategy = "head" if model_name == "scgpt_head" else "lora"
+        model = load_scgpt_annotation_model(
+            num_classes=len(label_categories),
+            checkpoint="whole-human",
+            tuning_strategy=tuning_strategy,
+            label_categories=prepared.label_categories,
+            device="auto",
+            lora_config=(
+                ScGPTLoRAConfig(
+                    rank=4,
+                    alpha=8.0,
+                    dropout=0.05,
+                    target_modules=("linear1", "linear2"),
+                )
+                if tuning_strategy == "lora"
+                else None
+            ),
+        )
+        trainer = Trainer(
+            model=model,
+            task="classification",
+            batch_size=prepared.batch_size,
+            epochs=(
+                profile_config["head_epochs"]
+                if tuning_strategy == "head"
+                else profile_config["lora_epochs"]
+            ),
+            lr=5e-3 if tuning_strategy == "head" else 2e-3,
+            device="auto",
+            early_stopping_patience=3,
+            seed=seed,
+        )
+        trainer.fit(split.train, split.val)
+        predictions = trainer.predict_dataset(test_dataset)
+        trainable_parameters = _count_trainable_parameters(model)
+    runtime_sec = perf_counter() - started_at
+
+    metrics = classification_metrics(predictions["y"], predictions["logits"])
+    metrics.update(representation_metrics(predictions["latent"], predictions["y"], None))
+    confusion = metrics.get("confusion_matrix")
+    if isinstance(confusion, list):
+        _save_confusion_plot(confusion, label_categories, output_dir)
+    _save_scanpy_umap(
+        test_adata,
+        np.asarray(predictions["latent"], dtype="float32"),
+        label_key,
+        output_dir / "latent_umap.png",
+        seed=seed,
+    )
+
+    report_metrics = {
+        "Dataset": dataset_name,
+        "Strategy": model_name,
+        "Trainable parameters": trainable_parameters,
+        **{
+            key: f"{value:.4f}" if isinstance(value, float) else value
+            for key, value in metrics.items()
+            if key != "confusion_matrix"
+        },
+    }
+    _write_report(output_dir, "scGPT annotation strategy report", report_metrics)
+    pd.DataFrame(
+        [
+            {
+                **metrics,
+                "trainable_parameters": trainable_parameters,
+                "confusion_matrix_artifact": str(output_dir / "confusion_matrix.png"),
+                "latent_umap_artifact": str(output_dir / "latent_umap.png"),
+            }
+        ]
+    ).to_csv(output_dir / "report.csv", index=False)
+
+    return {
+        "dataset": dataset_name,
+        "task": "foundation_annotation",
+        "model": model_name,
+        "seed": seed,
+        "profile": "foundation_annotation",
+        "runtime_sec": runtime_sec,
+        "peak_memory_mb": _process_peak_memory_mb(),
+        "artifact_dir": str(output_dir),
+        "trainable_parameters": trainable_parameters,
+        **_scalar_metrics(metrics),
+    }
+
+
 def aggregate_metrics(metrics_frame: pd.DataFrame) -> pd.DataFrame:
     numeric_columns = metrics_frame.select_dtypes(include=("number",)).columns.tolist()
     value_columns = [column for column in numeric_columns if column != "seed"]
@@ -743,6 +1106,8 @@ def aggregate_metrics(metrics_frame: pd.DataFrame) -> pd.DataFrame:
 def _required_benchmark_artifacts(task: str, model: str) -> tuple[str, ...]:
     if task == "foundation":
         return ("report.md", "report.csv", "latent_umap.png")
+    if task == "foundation_annotation":
+        return ("report.md", "report.csv", "confusion_matrix.png", "latent_umap.png")
     if task == "representation" and model in {"pca", "scgpt_whole_human"}:
         return ("report.md", "report.csv", "latent_umap.png")
     if task == "representation":
@@ -931,6 +1296,62 @@ def evaluate_quality_gates(metrics_frame: pd.DataFrame) -> list[str]:
         issues.append(
             "scGPT did not show a silhouette improvement over PCA on either PBMC dataset."
         )
+
+    annotation_rows = metrics_frame[
+        (metrics_frame["dataset"] == "pbmc3k_processed")
+        & (metrics_frame["task"] == "foundation_annotation")
+    ]
+    frozen_probe = annotation_rows[annotation_rows["model"] == "scgpt_frozen_probe"]
+    head_rows = annotation_rows[annotation_rows["model"] == "scgpt_head"]
+    lora_rows = annotation_rows[annotation_rows["model"] == "scgpt_lora"]
+    if frozen_probe.empty or head_rows.empty or lora_rows.empty:
+        issues.append("Foundation annotation benchmark for 'pbmc3k_processed' is incomplete.")
+        return issues
+
+    frozen_accuracy = float(frozen_probe["accuracy"].mean())
+    frozen_macro_f1 = float(frozen_probe["macro_f1"].mean())
+    head_accuracy = float(head_rows["accuracy"].mean())
+    head_macro_f1 = float(head_rows["macro_f1"].mean())
+    lora_accuracy = float(lora_rows["accuracy"].mean())
+    lora_macro_f1 = float(lora_rows["macro_f1"].mean())
+
+    if head_accuracy < frozen_accuracy - QUALITY_GATES["scgpt_annotation_head_accuracy_drop_max"]:
+        issues.append(
+            "scGPT head-only tuning regressed too far from the frozen probe baseline on "
+            "annotation accuracy "
+            f"(frozen {frozen_accuracy:.3f}, head {head_accuracy:.3f})."
+        )
+    if head_macro_f1 < frozen_macro_f1 - QUALITY_GATES["scgpt_annotation_head_macro_f1_drop_max"]:
+        issues.append(
+            "scGPT head-only tuning regressed too far from the frozen probe baseline on "
+            "annotation macro F1 "
+            f"(frozen {frozen_macro_f1:.3f}, head {head_macro_f1:.3f})."
+        )
+    if lora_accuracy < head_accuracy - QUALITY_GATES["scgpt_annotation_lora_accuracy_drop_max"]:
+        issues.append(
+            "scGPT LoRA annotation accuracy regressed too far from head-only tuning "
+            f"(head {head_accuracy:.3f}, LoRA {lora_accuracy:.3f})."
+        )
+    if lora_macro_f1 < head_macro_f1 - QUALITY_GATES["scgpt_annotation_lora_macro_f1_drop_max"]:
+        issues.append(
+            "scGPT LoRA annotation macro F1 regressed too far from head-only tuning "
+            f"(head {head_macro_f1:.3f}, LoRA {lora_macro_f1:.3f})."
+        )
+
+    best_accuracy = max(head_accuracy, lora_accuracy)
+    best_macro_f1 = max(head_macro_f1, lora_macro_f1)
+    if best_accuracy < QUALITY_GATES["scgpt_annotation_tuned_accuracy_min"]:
+        issues.append(
+            "No tuned scGPT annotation strategy reached the minimum accuracy target "
+            f"of {QUALITY_GATES['scgpt_annotation_tuned_accuracy_min']:.2f} "
+            f"(best {best_accuracy:.3f})."
+        )
+    if best_macro_f1 < QUALITY_GATES["scgpt_annotation_tuned_macro_f1_min"]:
+        issues.append(
+            "No tuned scGPT annotation strategy reached the minimum macro F1 target "
+            f"of {QUALITY_GATES['scgpt_annotation_tuned_macro_f1_min']:.2f} "
+            f"(best {best_macro_f1:.3f})."
+        )
     return issues
 
 
@@ -975,6 +1396,46 @@ def _evaluate_runtime(
                 f"(observed {transformer_mean:.1f}s)."
             )
 
+    head_rows = metrics_frame[
+        (metrics_frame["dataset"] == "pbmc3k_processed")
+        & (metrics_frame["task"] == "foundation_annotation")
+        & (metrics_frame["model"] == "scgpt_head")
+    ]
+    head_mean = float(head_rows["runtime_sec"].mean()) if not head_rows.empty else None
+    if head_mean is not None:
+        if head_mean > budgets["scgpt_head_fail_sec"]:
+            benchmark_issues.append(
+                "scGPT head-only annotation runtime exceeded the hard threshold "
+                f"of {budgets['scgpt_head_fail_sec']:.0f}s "
+                f"(observed {head_mean:.1f}s)."
+            )
+        elif head_mean > budgets["scgpt_head_warn_sec"]:
+            warnings.append(
+                "scGPT head-only annotation runtime exceeded the warning threshold "
+                f"of {budgets['scgpt_head_warn_sec']:.0f}s "
+                f"(observed {head_mean:.1f}s)."
+            )
+
+    lora_rows = metrics_frame[
+        (metrics_frame["dataset"] == "pbmc3k_processed")
+        & (metrics_frame["task"] == "foundation_annotation")
+        & (metrics_frame["model"] == "scgpt_lora")
+    ]
+    lora_mean = float(lora_rows["runtime_sec"].mean()) if not lora_rows.empty else None
+    if lora_mean is not None:
+        if lora_mean > budgets["scgpt_lora_fail_sec"]:
+            benchmark_issues.append(
+                "scGPT LoRA annotation runtime exceeded the hard threshold "
+                f"of {budgets['scgpt_lora_fail_sec']:.0f}s "
+                f"(observed {lora_mean:.1f}s)."
+            )
+        elif lora_mean > budgets["scgpt_lora_warn_sec"]:
+            warnings.append(
+                "scGPT LoRA annotation runtime exceeded the warning threshold "
+                f"of {budgets['scgpt_lora_warn_sec']:.0f}s "
+                f"(observed {lora_mean:.1f}s)."
+            )
+
     tutorial_runtime = tutorial_checks["runtime"]["total_sec"]
     tutorial_budget = tutorial_checks["runtime"]["budget_sec"]
     tutorial_passed = bool(tutorial_checks["runtime"]["passed"])
@@ -1007,6 +1468,16 @@ def _evaluate_runtime(
             "mean_runtime_sec": transformer_mean,
             "warn_sec": budgets["transformer_ae_warn_sec"],
             "fail_sec": budgets["transformer_ae_fail_sec"],
+        },
+        "scgpt_head": {
+            "mean_runtime_sec": head_mean,
+            "warn_sec": budgets["scgpt_head_warn_sec"],
+            "fail_sec": budgets["scgpt_head_fail_sec"],
+        },
+        "scgpt_lora": {
+            "mean_runtime_sec": lora_mean,
+            "warn_sec": budgets["scgpt_lora_warn_sec"],
+            "fail_sec": budgets["scgpt_lora_fail_sec"],
         },
         "per_model_means": per_model_means,
         "warnings": warnings,
@@ -1128,6 +1599,20 @@ def render_summary_markdown(summary: dict[str, Any]) -> str:
             f"(warn: `{runtime['transformer_ae']['warn_sec']:.0f}s`, "
             f"fail: `{runtime['transformer_ae']['fail_sec']:.0f}s`)"
         )
+    if runtime["scgpt_head"]["mean_runtime_sec"] is not None:
+        lines.append(
+            "- scGPT head-only annotation mean runtime: "
+            f"`{runtime['scgpt_head']['mean_runtime_sec']:.1f}s` "
+            f"(warn: `{runtime['scgpt_head']['warn_sec']:.0f}s`, "
+            f"fail: `{runtime['scgpt_head']['fail_sec']:.0f}s`)"
+        )
+    if runtime["scgpt_lora"]["mean_runtime_sec"] is not None:
+        lines.append(
+            "- scGPT LoRA annotation mean runtime: "
+            f"`{runtime['scgpt_lora']['mean_runtime_sec']:.1f}s` "
+            f"(warn: `{runtime['scgpt_lora']['warn_sec']:.0f}s`, "
+            f"fail: `{runtime['scgpt_lora']['fail_sec']:.0f}s`)"
+        )
     if runtime["warnings"]:
         lines.extend(["", "### Runtime warnings", ""])
         lines.extend(f"- {warning}" for warning in runtime["warnings"])
@@ -1188,6 +1673,7 @@ def render_summary_markdown(summary: dict[str, Any]) -> str:
             "macro_f1_mean",
             "probe_accuracy_mean",
             "probe_macro_f1_mean",
+            "trainable_parameters_mean",
             "runtime_sec_mean",
         )
         for metric in metric_names:
@@ -1206,11 +1692,15 @@ def render_summary_markdown(summary: dict[str, Any]) -> str:
             "",
             "- `pbmc3k_processed` is the primary release-quality representation benchmark.",
             "- `pbmc68k_reduced` is the experimental foundation-model comparison benchmark.",
+            "- `foundation_annotation` benchmarks compare frozen scGPT, head-only tuning, and "
+            "LoRA tuning for cell-type annotation.",
             "- `paul15` is the secondary built-in benchmark for checking dataset sensitivity.",
             "- `PCA` is the classical reference baseline for asking whether deep learning helps.",
             "- `pca_foundation` is the subset-matched PCA reference for scGPT comparisons.",
             "- `scgpt_whole_human` is the experimental frozen embedding baseline for "
             "human PBMC data.",
+            "- `scgpt_head` and `scgpt_lora` are experimental annotation fine-tuning "
+            "strategies built on the official `whole-human` checkpoint.",
             "- `transformer_ae` uses a compact CPU-friendly configuration in the quality suite: "
             "`patch_size=48`, `d_model=64`, `n_heads=2`, `n_layers=1`.",
         ]
@@ -1343,6 +1833,34 @@ def run_quality_suite(*, profile: str, output_dir: Path) -> pd.DataFrame:
                             batch_key=spec.batch_key,
                             seed=seed,
                             output_root=output_dir,
+                        )
+                    )
+
+    for dataset_name, model_seeds in profile_config.get("foundation_annotation", {}).items():
+        adata, spec = _load_dataset(dataset_name)
+        for model_name, seeds in model_seeds.items():
+            for seed in seeds:
+                if model_name == "pca_logistic_annotation":
+                    records.append(
+                        run_foundation_annotation_pca_logistic(
+                            dataset_name=dataset_name,
+                            adata=adata,
+                            label_key=spec.label_key,
+                            seed=seed,
+                            output_root=output_dir,
+                            profile=profile,
+                        )
+                    )
+                else:
+                    records.append(
+                        run_scgpt_annotation_strategy(
+                            dataset_name=dataset_name,
+                            adata=adata,
+                            label_key=spec.label_key,
+                            seed=seed,
+                            output_root=output_dir,
+                            model_name=model_name,
+                            profile=profile,
                         )
                     )
 
