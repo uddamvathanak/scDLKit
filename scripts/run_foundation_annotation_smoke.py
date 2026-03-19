@@ -16,6 +16,7 @@ if str(SRC) not in sys.path:
 
 from run_quality_suite import (  # noqa: E402
     DATASET_SPECS,
+    PROFILE_DEFAULTS,
     _load_dataset,
     run_scgpt_annotation_strategy,
 )
@@ -37,8 +38,13 @@ def main() -> None:
     seed = 42
     adata, spec = _load_dataset(dataset_name)
     rows: list[dict[str, object]] = []
+    model_names = tuple(
+        model_name
+        for model_name in PROFILE_DEFAULTS["ci"]["foundation_annotation"][dataset_name]
+        if model_name != "pca_logistic_annotation"
+    )
 
-    for model_name in ("scgpt_frozen_probe", "scgpt_head", "scgpt_lora"):
+    for model_name in model_names:
         row = run_scgpt_annotation_strategy(
             dataset_name=dataset_name,
             adata=adata,
@@ -62,18 +68,25 @@ def main() -> None:
         "dataset": dataset_name,
         "label_key": DATASET_SPECS[dataset_name].label_key,
         "checkpoint": "whole-human",
-        "probe_accuracy": float(metrics_by_model["scgpt_frozen_probe"]["accuracy"]),
-        "probe_macro_f1": float(metrics_by_model["scgpt_frozen_probe"]["macro_f1"]),
-        "head_accuracy": float(metrics_by_model["scgpt_head"]["accuracy"]),
-        "head_macro_f1": float(metrics_by_model["scgpt_head"]["macro_f1"]),
-        "lora_accuracy": float(metrics_by_model["scgpt_lora"]["accuracy"]),
-        "lora_macro_f1": float(metrics_by_model["scgpt_lora"]["macro_f1"]),
-        "trainable_parameters_head": int(metrics_by_model["scgpt_head"]["trainable_parameters"]),
-        "trainable_parameters_lora": int(metrics_by_model["scgpt_lora"]["trainable_parameters"]),
-        "probe_runtime_sec": float(metrics_by_model["scgpt_frozen_probe"]["runtime_sec"]),
-        "head_runtime_sec": float(metrics_by_model["scgpt_head"]["runtime_sec"]),
-        "lora_runtime_sec": float(metrics_by_model["scgpt_lora"]["runtime_sec"]),
     }
+    if "scgpt_frozen_probe" in metrics_by_model:
+        summary["probe_accuracy"] = float(metrics_by_model["scgpt_frozen_probe"]["accuracy"])
+        summary["probe_macro_f1"] = float(metrics_by_model["scgpt_frozen_probe"]["macro_f1"])
+        summary["probe_runtime_sec"] = float(metrics_by_model["scgpt_frozen_probe"]["runtime_sec"])
+    if "scgpt_head" in metrics_by_model:
+        summary["head_accuracy"] = float(metrics_by_model["scgpt_head"]["accuracy"])
+        summary["head_macro_f1"] = float(metrics_by_model["scgpt_head"]["macro_f1"])
+        summary["trainable_parameters_head"] = int(
+            metrics_by_model["scgpt_head"]["trainable_parameters"]
+        )
+        summary["head_runtime_sec"] = float(metrics_by_model["scgpt_head"]["runtime_sec"])
+    if "scgpt_lora" in metrics_by_model:
+        summary["lora_accuracy"] = float(metrics_by_model["scgpt_lora"]["accuracy"])
+        summary["lora_macro_f1"] = float(metrics_by_model["scgpt_lora"]["macro_f1"])
+        summary["trainable_parameters_lora"] = int(
+            metrics_by_model["scgpt_lora"]["trainable_parameters"]
+        )
+        summary["lora_runtime_sec"] = float(metrics_by_model["scgpt_lora"]["runtime_sec"])
 
     (output_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     lines = [

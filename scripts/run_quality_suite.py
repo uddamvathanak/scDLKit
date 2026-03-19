@@ -104,7 +104,6 @@ PROFILE_DEFAULTS: dict[str, dict[str, dict[str, dict[str, tuple[int, ...]]]]] = 
                 "pca_logistic_annotation": (42,),
                 "scgpt_frozen_probe": (42,),
                 "scgpt_head": (42,),
-                "scgpt_lora": (42,),
             },
         },
     },
@@ -1355,7 +1354,7 @@ def evaluate_quality_gates(metrics_frame: pd.DataFrame, *, profile: str) -> list
     frozen_probe = annotation_rows[annotation_rows["model"] == "scgpt_frozen_probe"]
     head_rows = annotation_rows[annotation_rows["model"] == "scgpt_head"]
     lora_rows = annotation_rows[annotation_rows["model"] == "scgpt_lora"]
-    if frozen_probe.empty or head_rows.empty or lora_rows.empty:
+    if frozen_probe.empty or head_rows.empty or (profile != "ci" and lora_rows.empty):
         issues.append("Foundation annotation benchmark for 'pbmc3k_processed' is incomplete.")
         return issues
 
@@ -1363,8 +1362,8 @@ def evaluate_quality_gates(metrics_frame: pd.DataFrame, *, profile: str) -> list
     frozen_macro_f1 = float(frozen_probe["macro_f1"].mean())
     head_accuracy = float(head_rows["accuracy"].mean())
     head_macro_f1 = float(head_rows["macro_f1"].mean())
-    lora_accuracy = float(lora_rows["accuracy"].mean())
-    lora_macro_f1 = float(lora_rows["macro_f1"].mean())
+    lora_accuracy = float(lora_rows["accuracy"].mean()) if not lora_rows.empty else float("nan")
+    lora_macro_f1 = float(lora_rows["macro_f1"].mean()) if not lora_rows.empty else float("nan")
 
     if head_accuracy < frozen_accuracy - QUALITY_GATES["scgpt_annotation_head_accuracy_drop_max"]:
         issues.append(
