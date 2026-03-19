@@ -69,7 +69,29 @@ jobs:
           name: smoke-${{ matrix.os }}
           path: artifacts
 
-  linux-tutorial-smoke:
+  linux-tutorial-smoke-classic:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Install package and tutorial dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[dev,tutorials]
+      - name: Execute tutorial suite and validate artifacts
+        run: python scripts/execute_tutorial_suite.py --profile ci --group classic --check
+      - name: Upload tutorial artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tutorial-smoke-classic-ubuntu
+          path: artifacts
+
+  linux-tutorial-smoke-foundation:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -83,17 +105,17 @@ jobs:
         with:
           path: ${{ env.SCDLKIT_CACHE_DIR }}
           key: scgpt-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
-      - name: Install package and tutorial dependencies
+      - name: Install package and foundation tutorial dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e .[dev,tutorials,foundation]
-      - name: Execute tutorial suite and validate artifacts
-        run: python scripts/execute_tutorial_suite.py --profile ci --check
-      - name: Upload tutorial artifacts
+      - name: Execute foundation tutorial suite and validate artifacts
+        run: python scripts/execute_tutorial_suite.py --profile ci --group foundation --check
+      - name: Upload foundation tutorial artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: tutorial-smoke-ubuntu
+          name: tutorial-smoke-foundation-ubuntu
           path: artifacts
 
   foundation-smoke:
@@ -133,7 +155,7 @@ jobs:
 
   quality-regression:
     runs-on: ubuntu-latest
-    needs: linux-tutorial-smoke
+    needs: [linux-tutorial-smoke-classic, linux-tutorial-smoke-foundation]
     permissions:
       contents: read
     steps:
@@ -150,11 +172,23 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e .[dev,tutorials,foundation]
-      - name: Download tutorial smoke artifacts
+      - name: Download classic tutorial smoke artifacts
         uses: actions/download-artifact@v4
         with:
-          name: tutorial-smoke-ubuntu
-          path: downloaded-artifacts
+          name: tutorial-smoke-classic-ubuntu
+          path: downloaded-artifacts/classic
+      - name: Download foundation tutorial smoke artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: tutorial-smoke-foundation-ubuntu
+          path: downloaded-artifacts/foundation
+      - name: Merge tutorial summaries
+        run: |
+          python scripts/merge_tutorial_summaries.py \
+            --inputs \
+              downloaded-artifacts/classic/tutorial_validation/summary.json \
+              downloaded-artifacts/foundation/tutorial_validation/summary.json \
+            --output downloaded-artifacts/tutorial_validation/summary.json
       - name: Run quality regression suite
         run: python scripts/run_quality_suite.py --profile ci --tutorial-summary downloaded-artifacts/tutorial_validation/summary.json --check --require-rc
       - name: Upload quality artifacts

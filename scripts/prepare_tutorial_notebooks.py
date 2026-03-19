@@ -28,6 +28,18 @@ NOTEBOOK_MAP = {
     "synthetic_smoke.ipynb": ROOT / "examples" / "first_run_synthetic.ipynb",
 }
 
+NOTEBOOK_GROUPS = {
+    "scanpy_pbmc_quickstart.ipynb": "classic",
+    "downstream_scanpy_after_scdlkit.ipynb": "classic",
+    "pbmc_model_comparison.ipynb": "classic",
+    "reconstruction_sanity_pbmc.ipynb": "classic",
+    "pbmc_classification.ipynb": "classic",
+    "custom_model_extension.ipynb": "classic",
+    "scgpt_pbmc_embeddings.ipynb": "foundation",
+    "scgpt_cell_type_annotation.ipynb": "foundation",
+    "synthetic_smoke.ipynb": "classic",
+}
+
 ASSET_MAP = {
     "first_run_loss_curve.png": ROOT / "artifacts" / "first_run_notebook" / "loss_curve.png",
     "first_run_latent_pca.png": ROOT / "artifacts" / "first_run_notebook" / "latent_pca.png",
@@ -46,12 +58,34 @@ def parse_args() -> argparse.Namespace:
         default="none",
         help="Execute synced notebooks after copying them.",
     )
+    parser.add_argument(
+        "--group",
+        choices=("all", "classic", "foundation"),
+        default="all",
+        help="Subset of tutorial notebooks to sync.",
+    )
+    parser.add_argument(
+        "--skip-assets",
+        action="store_true",
+        help="Skip syncing static docs assets.",
+    )
     return parser.parse_args()
 
 
-def sync_notebooks(execute: bool) -> None:
+def _selected_notebooks(group: str) -> list[tuple[str, Path]]:
+    notebooks = list(NOTEBOOK_MAP.items())
+    if group == "all":
+        return notebooks
+    return [
+        (target_name, source_path)
+        for target_name, source_path in notebooks
+        if NOTEBOOK_GROUPS[target_name] == group
+    ]
+
+
+def sync_notebooks(*, execute: bool, group: str) -> None:
     TUTORIAL_DIR.mkdir(parents=True, exist_ok=True)
-    for target_name, source_path in NOTEBOOK_MAP.items():
+    for target_name, source_path in _selected_notebooks(group):
         if not source_path.exists():
             msg = f"Required tutorial notebook is missing: {source_path}"
             raise FileNotFoundError(msg)
@@ -87,8 +121,9 @@ def sync_assets() -> None:
 
 def main() -> None:
     args = parse_args()
-    sync_notebooks(execute=args.execute == "published")
-    sync_assets()
+    sync_notebooks(execute=args.execute == "published", group=args.group)
+    if not args.skip_assets:
+        sync_assets()
 
 
 if __name__ == "__main__":
