@@ -170,7 +170,6 @@ jobs:
       - name: Run foundation smoke
         run: |
           python scripts/run_foundation_smoke.py
-          python scripts/run_foundation_annotation_smoke.py
       - name: Upload foundation smoke artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -178,7 +177,34 @@ jobs:
           name: foundation-smoke-${{ matrix.os }}
           path: |
             artifacts/foundation_smoke
-            artifacts/foundation_annotation_smoke
+
+  foundation-annotation-metrics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Restore scGPT checkpoint cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.SCDLKIT_CACHE_DIR }}
+          key: scgpt-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+      - name: Install package and foundation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[dev,foundation,tutorials]
+      - name: Run foundation annotation metrics
+        run: python scripts/run_foundation_annotation_smoke.py
+      - name: Upload foundation annotation metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: foundation-annotation-metrics-ubuntu
+          path: artifacts/foundation_annotation_smoke
 
   quality-regression:
     runs-on: ubuntu-latest
@@ -188,6 +214,7 @@ jobs:
       - linux-tutorial-smoke-foundation-embeddings
       - linux-tutorial-smoke-foundation-annotation
       - foundation-smoke
+      - foundation-annotation-metrics
     permissions:
       contents: read
     steps:
@@ -219,11 +246,11 @@ jobs:
         with:
           name: tutorial-smoke-foundation-annotation-ubuntu
           path: downloaded-artifacts/foundation-annotation
-      - name: Download Ubuntu foundation smoke artifacts
+      - name: Download foundation annotation metrics
         uses: actions/download-artifact@v4
         with:
-          name: foundation-smoke-ubuntu-latest
-          path: downloaded-artifacts/foundation-smoke
+          name: foundation-annotation-metrics-ubuntu
+          path: downloaded-artifacts/foundation-annotation-metrics
       - name: Merge tutorial summaries
         run: |
           python scripts/merge_tutorial_summaries.py \
@@ -237,7 +264,7 @@ jobs:
           python scripts/run_quality_suite.py \
             --profile ci \
             --tutorial-summary downloaded-artifacts/tutorial_validation/summary.json \
-            --foundation-annotation-metrics downloaded-artifacts/foundation-smoke/foundation_annotation_smoke/metrics.csv \
+            --foundation-annotation-metrics downloaded-artifacts/foundation-annotation-metrics/foundation_annotation_smoke/metrics.csv \
             --check \
             --require-rc
       - name: Upload quality artifacts
