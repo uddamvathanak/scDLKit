@@ -5,7 +5,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/scdlkit?cacheSeconds=300)](https://pypi.org/project/scdlkit/)
 [![Python versions](https://img.shields.io/pypi/pyversions/scdlkit?cacheSeconds=300)](https://pypi.org/project/scdlkit/)
 [![License](https://img.shields.io/pypi/l/scdlkit?cacheSeconds=300)](LICENSE)
-[![PyPI downloads](https://img.shields.io/pypi/dm/scdlkit)](https://pypistats.org/packages/scdlkit)
+[![PyPI total downloads](https://img.shields.io/pypi/dt/scdlkit)](https://pypistats.org/packages/scdlkit)
 [![GitHub stars](https://img.shields.io/github/stars/uddamvathanak/scDLKit?style=social)](https://github.com/uddamvathanak/scDLKit/stargazers)
 
 Train, evaluate, compare, and visualize baseline deep-learning models for single-cell data without writing PyTorch from scratch.
