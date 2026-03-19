@@ -65,6 +65,12 @@ def parse_args() -> argparse.Namespace:
         help="Subset of tutorial notebooks to sync.",
     )
     parser.add_argument(
+        "--only",
+        nargs="+",
+        default=None,
+        help="Optional target notebook filenames to sync explicitly.",
+    )
+    parser.add_argument(
         "--skip-assets",
         action="store_true",
         help="Skip syncing static docs assets.",
@@ -72,8 +78,23 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _selected_notebooks(group: str) -> list[tuple[str, Path]]:
+def _selected_notebooks(group: str, only: list[str] | None) -> list[tuple[str, Path]]:
     notebooks = list(NOTEBOOK_MAP.items())
+    if only:
+        allowed = set(only)
+        selected = [
+            (target_name, source_path)
+            for target_name, source_path in notebooks
+            if target_name in allowed
+        ]
+        missing = sorted(allowed - {target_name for target_name, _ in selected})
+        if missing:
+            msg = (
+                "Unknown tutorial notebook targets passed to --only: "
+                f"{', '.join(missing)}."
+            )
+            raise ValueError(msg)
+        return selected
     if group == "all":
         return notebooks
     return [
@@ -83,9 +104,9 @@ def _selected_notebooks(group: str) -> list[tuple[str, Path]]:
     ]
 
 
-def sync_notebooks(*, execute: bool, group: str) -> None:
+def sync_notebooks(*, execute: bool, group: str, only: list[str] | None) -> None:
     TUTORIAL_DIR.mkdir(parents=True, exist_ok=True)
-    for target_name, source_path in _selected_notebooks(group):
+    for target_name, source_path in _selected_notebooks(group, only):
         if not source_path.exists():
             msg = f"Required tutorial notebook is missing: {source_path}"
             raise FileNotFoundError(msg)
@@ -121,7 +142,11 @@ def sync_assets() -> None:
 
 def main() -> None:
     args = parse_args()
-    sync_notebooks(execute=args.execute == "published", group=args.group)
+    sync_notebooks(
+        execute=args.execute == "published",
+        group=args.group,
+        only=args.only,
+    )
     if not args.skip_assets:
         sync_assets()
 

@@ -170,6 +170,12 @@ def parse_args() -> argparse.Namespace:
         help="Subset of tutorials to execute.",
     )
     parser.add_argument(
+        "--only",
+        nargs="+",
+        default=None,
+        help="Optional tutorial names to execute explicitly.",
+    )
+    parser.add_argument(
         "--check",
         action="store_true",
         help="Fail when tutorial runtime or artifact validation does not pass.",
@@ -177,7 +183,18 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _selected_specs(group: str) -> tuple[TutorialSpec, ...]:
+def _selected_specs(group: str, only: list[str] | None) -> tuple[TutorialSpec, ...]:
+    if only:
+        allowed_names = set(only)
+        selected = tuple(spec for spec in TUTORIAL_SPECS if spec.name in allowed_names)
+        missing = sorted(allowed_names - {spec.name for spec in selected})
+        if missing:
+            msg = (
+                "Unknown tutorial names passed to --only: "
+                f"{', '.join(missing)}."
+            )
+            raise ValueError(msg)
+        return selected
     if group == "all":
         return TUTORIAL_SPECS
     return tuple(spec for spec in TUTORIAL_SPECS if spec.group == group)
@@ -250,13 +267,18 @@ def render_summary_markdown(summary: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def run_tutorial_suite(profile: str, *, group: str) -> dict[str, object]:
+def run_tutorial_suite(
+    profile: str,
+    *,
+    group: str,
+    only: list[str] | None,
+) -> dict[str, object]:
     NOTEBOOK_ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
     SUMMARY_DIR.mkdir(parents=True, exist_ok=True)
     notebook_records: list[dict[str, object]] = []
     missing_files: list[str] = []
     suite_started_at = perf_counter()
-    specs = _selected_specs(group)
+    specs = _selected_specs(group, only)
     for spec in specs:
         record, notebook_missing_files = _execute_notebook(spec, profile)
         notebook_records.append(record)
@@ -296,7 +318,7 @@ def run_tutorial_suite(profile: str, *, group: str) -> dict[str, object]:
 
 def main() -> None:
     args = parse_args()
-    summary = run_tutorial_suite(args.profile, group=args.group)
+    summary = run_tutorial_suite(args.profile, group=args.group, only=args.only)
     (SUMMARY_DIR / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     (SUMMARY_DIR / "summary.md").write_text(render_summary_markdown(summary), encoding="utf-8")
     print(render_summary_markdown(summary))
