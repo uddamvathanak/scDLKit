@@ -15,6 +15,31 @@ class SplitIndices:
     test: np.ndarray
 
 
+def _safe_train_test_split(
+    indices: np.ndarray,
+    *,
+    test_size: float,
+    random_state: int,
+    stratify: np.ndarray | None,
+) -> tuple[np.ndarray, np.ndarray]:
+    try:
+        return train_test_split(
+            indices,
+            test_size=test_size,
+            random_state=random_state,
+            stratify=stratify,
+        )
+    except ValueError:
+        if stratify is None:
+            raise
+        return train_test_split(
+            indices,
+            test_size=test_size,
+            random_state=random_state,
+            stratify=None,
+        )
+
+
 def build_splits(
     n_samples: int,
     *,
@@ -47,7 +72,7 @@ def build_splits(
         )
         train_idx, holdout_idx = next(splitter.split(all_indices, groups=groups))
     else:
-        train_idx, holdout_idx = train_test_split(
+        train_idx, holdout_idx = _safe_train_test_split(
             all_indices,
             test_size=holdout_fraction,
             random_state=random_state,
@@ -79,7 +104,7 @@ def build_splits(
         )
         val_rel, test_rel = next(splitter.split(holdout_idx, groups=holdout_groups))
     else:
-        val_rel, test_rel = train_test_split(
+        val_rel, test_rel = _safe_train_test_split(
             np.arange(holdout_idx.size),
             test_size=test_fraction,
             random_state=random_state,

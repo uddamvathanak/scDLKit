@@ -58,7 +58,8 @@ Follow this order if you want the tutorial set to build up like a coherent workf
 5. [PBMC classification](/_tutorials/pbmc_classification)
 6. [Custom model extension](/_tutorials/custom_model_extension)
 7. [Experimental scGPT PBMC embeddings](/_tutorials/scgpt_pbmc_embeddings)
-8. [Synthetic smoke tutorial](/_tutorials/synthetic_smoke)
+8. [Experimental scGPT cell-type annotation](/_tutorials/scgpt_cell_type_annotation)
+9. [Synthetic smoke tutorial](/_tutorials/synthetic_smoke)
 
 ````{grid} 1 2 2 2
 :gutter: 3
@@ -96,6 +97,13 @@ Use a dedicated reconstruction tutorial to inspect predicted or reconstructed ge
 :link-type: doc
 
 Start with the public workflow APIs first, then drop into lower-level, custom-model, and experimental surfaces as needed.
+```
+
+```{grid-item-card} Experimental scGPT annotation
+:link: _tutorials/scgpt_cell_type_annotation
+:link-type: doc
+
+Compare `PCA + logistic regression`, frozen scGPT, head-only tuning, and LoRA tuning on labeled PBMC data.
 ```
 
 ```{grid-item-card} Scanpy integration map

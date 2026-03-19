@@ -118,6 +118,20 @@ How do I extract frozen scGPT embeddings and return them to Scanpy?
 Outputs:
 Report, latent UMAP, frozen linear-probe confusion matrix, embedding summary.
 ```
+
+```{grid-item-card} Experimental scGPT cell-type annotation
+:link: /_tutorials/scgpt_cell_type_annotation
+:link-type: doc
+
+Audience:
+Users who want to compare frozen and fine-tuned scGPT strategies on a labeled dataset.
+
+Question answered:
+Do I need only frozen scGPT embeddings, a trainable classification head, or LoRA tuning?
+
+Outputs:
+Report, strategy metrics table, frozen UMAP, LoRA UMAP, best-strategy confusion matrix.
+```
 ````
 
 ## Fallback path
@@ -149,7 +163,8 @@ Report, loss curve, latent PCA.
 5. PBMC classification
 6. Custom model extension
 7. Experimental scGPT PBMC embeddings
-8. Synthetic smoke tutorial
+8. Experimental scGPT cell-type annotation
+9. Synthetic smoke tutorial
 
 ```{toctree}
 :hidden:
@@ -162,5 +177,6 @@ Report, loss curve, latent PCA.
 /_tutorials/pbmc_classification
 /_tutorials/custom_model_extension
 /_tutorials/scgpt_pbmc_embeddings
+/_tutorials/scgpt_cell_type_annotation
 /_tutorials/synthetic_smoke
 ```

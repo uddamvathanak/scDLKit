@@ -81,6 +81,7 @@ What you get from this quickstart:
 - Reconstruction notebook: `examples/reconstruction_sanity_pbmc.ipynb`
 - Custom model notebook: `examples/custom_model_extension.ipynb`
 - Experimental foundation notebook: `examples/scgpt_pbmc_embeddings.ipynb`
+- Experimental annotation fine-tuning notebook: `examples/scgpt_cell_type_annotation.ipynb`
 - Synthetic smoke examples: `examples/first_run_synthetic.ipynb`, `examples/first_run_synthetic.py`
 
 ## Why scDLKit
@@ -92,6 +93,7 @@ What you get from this quickstart:
 - Built-in benchmark gates on small Scanpy datasets before tutorial defaults change.
 - Gene-expression-focused scope while the core toolkit stabilizes.
 - Experimental frozen scGPT embeddings for human PBMC workflows.
+- Experimental scGPT annotation fine-tuning with head-only and LoRA strategies.
 
 ## Supported platforms
 
@@ -163,6 +165,7 @@ Additional Scanpy-first notebooks:
 - `examples/classification_demo.ipynb`: run the `mlp_classifier` baseline and inspect a confusion matrix
 - `examples/custom_model_extension.ipynb`: wrap a raw PyTorch autoencoder and train it through `Trainer`
 - `examples/scgpt_pbmc_embeddings.ipynb`: run the experimental frozen `whole-human` scGPT embedding workflow and return to Scanpy through `adata.obsm`
+- `examples/scgpt_cell_type_annotation.ipynb`: compare `PCA + logistic regression`, frozen scGPT, head-only tuning, and LoRA tuning for labeled PBMC annotation
 
 The synthetic notebook and script are still available, but they are now the smoke-test path rather than the primary researcher onboarding flow:
 
@@ -219,6 +222,16 @@ Experimental foundation helpers:
 from scdlkit.foundation import load_scgpt_model, prepare_scgpt_data
 ```
 
+Experimental scGPT annotation tuning:
+
+```python
+from scdlkit.foundation import (
+    load_scgpt_annotation_model,
+    prepare_scgpt_data,
+    split_scgpt_data,
+)
+```
+
 Comparison:
 
 ```python
@@ -254,8 +267,9 @@ benchmark = compare_models(
 - Built-in deep-learning baselines plus classical comparison context in notebooks
 - Adapter-based custom PyTorch model support through `Trainer`
 - Experimental scGPT frozen embedding support for human PBMC workflows
+- Experimental scGPT annotation fine-tuning for labeled human PBMC workflows through `Trainer`
 
-Fine-tuning, broader foundation-model support, spatial omics, and multimodal workflows remain future work once the gene-expression toolkit quality gates stay stable.
+Broader foundation-model support, full-backbone fine-tuning, spatial omics, and multimodal workflows remain future work once the gene-expression toolkit quality gates stay stable.
 
 ## Documentation
 
@@ -307,7 +321,7 @@ Immediate roadmap target:
 
 - keep the built-in `TaskRunner` story stable for bundled baselines
 - preserve adapter-first custom-model support through `Trainer`
-- add a narrow experimental scGPT embedding workflow through `Trainer.predict_dataset(...)`
+- add a narrow experimental scGPT annotation fine-tuning workflow through `Trainer`
 - keep the toolkit gene-expression-focused while the foundation path hardens
 
 Released so far:
@@ -320,7 +334,7 @@ Released so far:
 
 Later:
 
-- fine-tuning and broader foundation-model integration built on top of the frozen embedding path
+- broader foundation-model fine-tuning beyond annotation once the experimental scGPT path is stable
 - spatial baselines only after the gene-expression toolkit is stable
 
 ## Citation

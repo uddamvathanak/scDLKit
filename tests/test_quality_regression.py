@@ -34,13 +34,14 @@ def _tutorial_summary(*, passed: bool = True, runtime_passed: bool = True) -> di
             {"name": "pbmc_classification"},
             {"name": "custom_model_extension"},
             {"name": "scgpt_pbmc_embeddings"},
+            {"name": "scgpt_cell_type_annotation"},
             {"name": "synthetic_smoke"},
         ],
         "runtime": {
             "total_sec": 120.0,
             "budget_sec": 480.0,
             "passed": runtime_passed,
-            "notebook_count": 8,
+            "notebook_count": 9,
         },
         "artifact_checks": {
             "passed": passed,
@@ -64,9 +65,14 @@ def _metrics_frame(
     scgpt_pbmc68k_probe_macro_f1: float = 0.81,
     scgpt_pbmc68k_probe_accuracy: float = 0.82,
     scgpt_pbmc68k_silhouette: float = 0.16,
+    scgpt_head_accuracy: float = 0.88,
+    scgpt_head_macro_f1: float = 0.84,
+    scgpt_lora_accuracy: float = 0.87,
+    scgpt_lora_macro_f1: float = 0.83,
     include_paul15: bool = True,
     include_transformer: bool = True,
     include_scgpt: bool = True,
+    include_foundation_annotation: bool = True,
 ) -> pd.DataFrame:
     rows = []
     rows.append(
@@ -200,6 +206,95 @@ def _metrics_frame(
                     "silhouette": scgpt_pbmc68k_silhouette,
                     "probe_accuracy": scgpt_pbmc68k_probe_accuracy,
                     "probe_macro_f1": scgpt_pbmc68k_probe_macro_f1,
+                },
+            ]
+        )
+    if include_foundation_annotation:
+        rows.extend(
+            [
+                {
+                    "dataset": "pbmc3k_processed",
+                    "task": "foundation_annotation",
+                    "model": "pca_logistic_annotation",
+                    "seed": 42,
+                    "runtime_sec": 0.6,
+                    "artifact_dir": str(
+                        _make_artifact_dir(
+                            tmp_path,
+                            (
+                                "report.md",
+                                "report.csv",
+                                "confusion_matrix.png",
+                                "latent_umap.png",
+                            ),
+                        )
+                    ),
+                    "accuracy": 0.81,
+                    "macro_f1": 0.77,
+                    "trainable_parameters": 0,
+                },
+                {
+                    "dataset": "pbmc3k_processed",
+                    "task": "foundation_annotation",
+                    "model": "scgpt_frozen_probe",
+                    "seed": 42,
+                    "runtime_sec": 9.5,
+                    "artifact_dir": str(
+                        _make_artifact_dir(
+                            tmp_path,
+                            (
+                                "report.md",
+                                "report.csv",
+                                "confusion_matrix.png",
+                                "latent_umap.png",
+                            ),
+                        )
+                    ),
+                    "accuracy": 0.74,
+                    "macro_f1": 0.69,
+                    "trainable_parameters": 0,
+                },
+                {
+                    "dataset": "pbmc3k_processed",
+                    "task": "foundation_annotation",
+                    "model": "scgpt_head",
+                    "seed": 42,
+                    "runtime_sec": 12.0,
+                    "artifact_dir": str(
+                        _make_artifact_dir(
+                            tmp_path,
+                            (
+                                "report.md",
+                                "report.csv",
+                                "confusion_matrix.png",
+                                "latent_umap.png",
+                            ),
+                        )
+                    ),
+                    "accuracy": scgpt_head_accuracy,
+                    "macro_f1": scgpt_head_macro_f1,
+                    "trainable_parameters": 195,
+                },
+                {
+                    "dataset": "pbmc3k_processed",
+                    "task": "foundation_annotation",
+                    "model": "scgpt_lora",
+                    "seed": 42,
+                    "runtime_sec": 18.0,
+                    "artifact_dir": str(
+                        _make_artifact_dir(
+                            tmp_path,
+                            (
+                                "report.md",
+                                "report.csv",
+                                "confusion_matrix.png",
+                                "latent_umap.png",
+                            ),
+                        )
+                    ),
+                    "accuracy": scgpt_lora_accuracy,
+                    "macro_f1": scgpt_lora_macro_f1,
+                    "trainable_parameters": 731,
                 },
             ]
         )
@@ -340,6 +435,10 @@ def test_quality_gates_fail_for_regression_metrics(tmp_path: Path) -> None:
             scgpt_pbmc68k_probe_macro_f1=0.75,
             scgpt_pbmc68k_probe_accuracy=0.76,
             scgpt_pbmc68k_silhouette=0.11,
+            scgpt_head_accuracy=0.76,
+            scgpt_head_macro_f1=0.70,
+            scgpt_lora_accuracy=0.72,
+            scgpt_lora_macro_f1=0.68,
         ),
         profile="ci",
         tutorial_summary=_tutorial_summary(),
@@ -369,3 +468,13 @@ def test_missing_scgpt_run_blocks_release_readiness(tmp_path: Path) -> None:
     )
     assert summary["benchmark_ready"] is False
     assert any("scgpt_whole_human" in missing for missing in summary["missing_runs"])
+
+
+def test_missing_foundation_annotation_run_blocks_release_readiness(tmp_path: Path) -> None:
+    summary = quality_suite.build_summary(
+        _metrics_frame(tmp_path, include_foundation_annotation=False),
+        profile="ci",
+        tutorial_summary=_tutorial_summary(),
+    )
+    assert summary["benchmark_ready"] is False
+    assert any("scgpt_head" in missing for missing in summary["missing_runs"])
