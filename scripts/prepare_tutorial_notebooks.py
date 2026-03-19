@@ -55,12 +55,25 @@ def sync_notebooks(execute: bool) -> None:
         if not source_path.exists():
             msg = f"Required tutorial notebook is missing: {source_path}"
             raise FileNotFoundError(msg)
+        print(
+            f"[prepare_tutorial_notebooks] syncing {source_path.name} -> {target_name}",
+            flush=True,
+        )
         notebook = nbformat.read(source_path, as_version=4)
         target_path = TUTORIAL_DIR / target_name
         if execute:
+            print(
+                f"[prepare_tutorial_notebooks] executing {target_name} for published docs",
+                flush=True,
+            )
             executor = ExecutePreprocessor(timeout=None, kernel_name="python3")
             executor.preprocess(notebook, {"metadata": {"path": str(ROOT)}})
+            print(
+                f"[prepare_tutorial_notebooks] finished executing {target_name}",
+                flush=True,
+            )
         nbformat.write(notebook, target_path)
+        print(f"[prepare_tutorial_notebooks] wrote {target_path}", flush=True)
 
 
 def sync_assets() -> None:
