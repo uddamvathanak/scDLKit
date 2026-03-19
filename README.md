@@ -321,8 +321,8 @@ Immediate roadmap target:
 
 - keep the built-in `TaskRunner` story stable for bundled baselines
 - preserve adapter-first custom-model support through `Trainer`
-- add a narrow experimental scGPT annotation fine-tuning workflow through `Trainer`
-- keep the toolkit gene-expression-focused while the foundation path hardens
+- keep the experimental scGPT frozen-embedding and annotation-tuning paths narrow and inspectable
+- expand experimental adaptation workflows cautiously without broadening the toolkit too early
 
 Released so far:
 

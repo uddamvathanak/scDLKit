@@ -10,7 +10,7 @@ on:
       version:
         description: Version expected on TestPyPI
         required: true
-        default: 0.1.3
+        default: 0.1.5
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -90,4 +90,29 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: testpypi-smoke-${{ matrix.os }}
+          path: artifacts
+
+  foundation-smoke:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Install staged foundation package from TestPyPI
+        run: python scripts/install_from_index.py --package "scdlkit[foundation,tutorials]==${{ inputs.version }}" --index-url https://test.pypi.org/simple/
+      - name: Run frozen foundation smoke
+        run: python scripts/run_foundation_smoke.py
+      - name: Run annotation foundation smoke
+        run: python scripts/run_foundation_annotation_smoke.py
+      - name: Upload foundation smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: testpypi-foundation-smoke-ubuntu
           path: artifacts

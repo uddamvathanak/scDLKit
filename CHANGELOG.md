@@ -1,11 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.1.5
 
 - Added `scdlkit.foundation` with an experimental frozen scGPT embedding path for the official `whole-human` checkpoint.
-- Extended `Trainer.predict_dataset(...)` to support batch-aware inference hooks for non-`x` tokenized workflows.
-- Added a real-checkpoint foundation smoke script, an experimental scGPT PBMC notebook, and docs for the new embedding workflow.
-- Extended the quality suite to compare the scGPT pilot against `PCA` on built-in PBMC datasets.
+- Added experimental scGPT annotation fine-tuning for labeled human scRNA-seq through `Trainer`, including frozen linear-probe, head-only, and LoRA comparison workflows.
+- Added tokenized scGPT data preparation and split helpers for annotation workflows.
+- Extended `Trainer.predict_dataset(...)` to support batch-aware inference hooks for non-`x` tokenized workflows used by the foundation path.
+- Added foundation smoke scripts, an experimental scGPT PBMC embedding tutorial, and an experimental scGPT cell-type annotation tutorial.
+- Hardened the public tutorial path with downstream Scanpy and reconstruction sanity-check notebooks, quickstart-first landing pages, and a narrative-first API reference.
+- Extended the quality suite and CI workflows to validate the experimental foundation path and its released tutorial story.
 
 ## 0.1.3
 
