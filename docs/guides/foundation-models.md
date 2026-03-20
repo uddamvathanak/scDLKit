@@ -6,7 +6,7 @@ The public scope is still deliberately narrow:
 
 - official `whole-human` checkpoint only
 - human single-cell RNA only
-- `Trainer` plus `scdlkit.foundation` helpers
+- wrapper-first helpers for beginners, `Trainer` plus `scdlkit.foundation` helpers underneath
 - frozen embeddings remain supported
 - experimental cell-type annotation fine-tuning is now supported through:
   - frozen linear probe
@@ -34,6 +34,48 @@ Use the experimental foundation path when you want to:
   - parameter-efficient LoRA tuning
 
 This is the bridge between the baseline toolkit and later foundation-model adaptation work.
+
+## Easiest wrapper-first path
+
+If you want the smallest amount of code, start here:
+
+```python
+from scdlkit.foundation import adapt_scgpt_annotation
+
+runner = adapt_scgpt_annotation(
+    adata,
+    label_key="cell_type",
+    output_dir="artifacts/scgpt_annotation",
+)
+
+runner.annotate_adata(adata)
+runner.save("artifacts/scgpt_annotation/best_model")
+```
+
+This wrapper:
+
+- inspects the labeled dataset
+- compares frozen probe, head-only tuning, and LoRA tuning
+- keeps the best fitted strategy in memory
+- writes standard report artifacts
+- makes it easy to annotate `AnnData` and save the best fitted runner
+
+## Inspect before training
+
+For user-supplied datasets, inspect first:
+
+```python
+from scdlkit.foundation import inspect_scgpt_annotation_data
+
+report = inspect_scgpt_annotation_data(
+    adata,
+    label_key="cell_type",
+    checkpoint="whole-human",
+)
+```
+
+This is the recommended preflight step when you want to know whether gene overlap
+or class balance is likely to make the adaptation path brittle.
 
 ## Frozen embedding API
 
@@ -98,6 +140,23 @@ predictions = trainer.predict_dataset(split.test)
 adata.obsm["X_scgpt_lora"] = predictions["latent"]
 ```
 
+## Wrapper class for advanced convenience
+
+If you want the easy path but still need explicit control over the fitted object,
+use the runner directly:
+
+```python
+from scdlkit.foundation import ScGPTAnnotationRunner
+
+runner = ScGPTAnnotationRunner(label_key="cell_type", output_dir="artifacts/scgpt_annotation")
+runner.inspect(adata)
+runner.fit_compare(adata)
+runner.annotate_adata(adata)
+runner.save("artifacts/scgpt_annotation/best_model")
+```
+
+The lower-level `Trainer` path remains the advanced public surface underneath the wrapper.
+
 ## When to use each strategy
 
 - frozen linear probe:
@@ -123,6 +182,8 @@ adata.obsm["X_scgpt_lora"] = predictions["latent"]
 
 - frozen embeddings: [Experimental scGPT PBMC embeddings](/_tutorials/scgpt_pbmc_embeddings)
 - annotation tuning: [Experimental scGPT cell-type annotation](/_tutorials/scgpt_cell_type_annotation)
+- dataset-specific wrapper workflow: [Experimental scGPT dataset-specific annotation](/_tutorials/scgpt_dataset_specific_annotation)
+- user-data guide: [Experimental annotation on your data](/guides/annotation-on-your-data)
 
 ## Positioning
 

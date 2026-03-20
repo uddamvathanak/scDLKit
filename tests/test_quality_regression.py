@@ -35,13 +35,14 @@ def _tutorial_summary(*, passed: bool = True, runtime_passed: bool = True) -> di
             {"name": "custom_model_extension"},
             {"name": "scgpt_pbmc_embeddings"},
             {"name": "scgpt_cell_type_annotation"},
+            {"name": "scgpt_dataset_specific_annotation"},
             {"name": "synthetic_smoke"},
         ],
         "runtime": {
             "total_sec": 120.0,
             "budget_sec": 480.0,
             "passed": runtime_passed,
-            "notebook_count": 9,
+            "notebook_count": 10,
         },
         "artifact_checks": {
             "passed": passed,

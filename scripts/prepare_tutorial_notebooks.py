@@ -25,6 +25,9 @@ NOTEBOOK_MAP = {
     "custom_model_extension.ipynb": ROOT / "examples" / "custom_model_extension.ipynb",
     "scgpt_pbmc_embeddings.ipynb": ROOT / "examples" / "scgpt_pbmc_embeddings.ipynb",
     "scgpt_cell_type_annotation.ipynb": ROOT / "examples" / "scgpt_cell_type_annotation.ipynb",
+    "scgpt_dataset_specific_annotation.ipynb": (
+        ROOT / "examples" / "scgpt_dataset_specific_annotation.ipynb"
+    ),
     "synthetic_smoke.ipynb": ROOT / "examples" / "first_run_synthetic.ipynb",
 }
 
@@ -37,6 +40,7 @@ NOTEBOOK_GROUPS = {
     "custom_model_extension.ipynb": "classic",
     "scgpt_pbmc_embeddings.ipynb": "foundation",
     "scgpt_cell_type_annotation.ipynb": "foundation",
+    "scgpt_dataset_specific_annotation.ipynb": "foundation",
     "synthetic_smoke.ipynb": "classic",
 }
 

@@ -167,6 +167,7 @@ REQUIRED_TUTORIAL_NAMES = (
     "custom_model_extension",
     "scgpt_pbmc_embeddings",
     "scgpt_cell_type_annotation",
+    "scgpt_dataset_specific_annotation",
     "synthetic_smoke",
 )
 

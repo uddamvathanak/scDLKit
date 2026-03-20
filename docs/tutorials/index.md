@@ -132,6 +132,20 @@ Do I need only frozen scGPT embeddings, a trainable classification head, or LoRA
 Outputs:
 Report, strategy metrics table, frozen UMAP, LoRA UMAP, best-strategy confusion matrix.
 ```
+
+```{grid-item-card} Experimental scGPT dataset-specific annotation
+:link: /_tutorials/scgpt_dataset_specific_annotation
+:link-type: doc
+
+Audience:
+Users who want the easiest wrapper-first path for adapting scGPT to a labeled dataset with minimal code.
+
+Question answered:
+How do I inspect my dataset, compare strategies, annotate `AnnData`, and save the best fitted runner in one workflow?
+
+Outputs:
+Report, strategy metrics table, frozen UMAP, best-strategy UMAP, saved runner manifest, saved runner weights.
+```
 ````
 
 ## Fallback path
@@ -164,7 +178,8 @@ Report, loss curve, latent PCA.
 6. Custom model extension
 7. Experimental scGPT PBMC embeddings
 8. Experimental scGPT cell-type annotation
-9. Synthetic smoke tutorial
+9. Experimental scGPT dataset-specific annotation
+10. Synthetic smoke tutorial
 
 ```{toctree}
 :hidden:
@@ -178,5 +193,6 @@ Report, loss curve, latent PCA.
 /_tutorials/custom_model_extension
 /_tutorials/scgpt_pbmc_embeddings
 /_tutorials/scgpt_cell_type_annotation
+/_tutorials/scgpt_dataset_specific_annotation
 /_tutorials/synthetic_smoke
 ```

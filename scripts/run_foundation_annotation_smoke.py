@@ -6,6 +6,7 @@ import json
 import sys
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,8 +19,12 @@ from run_quality_suite import (  # noqa: E402
     DATASET_SPECS,
     PROFILE_DEFAULTS,
     _load_dataset,
+    _subset_adata_for_foundation,
+    _subset_foundation_genes,
     run_scgpt_annotation_strategy,
 )
+
+from scdlkit.foundation import ScGPTAnnotationRunner, adapt_scgpt_annotation  # noqa: E402
 
 
 def _relative_artifact_dir(output_dir: Path, artifact_dir: str) -> str:
@@ -87,6 +92,49 @@ def main() -> None:
             metrics_by_model["scgpt_lora"]["trainable_parameters"]
         )
         summary["lora_runtime_sec"] = float(metrics_by_model["scgpt_lora"]["runtime_sec"])
+
+    wrapper_output_dir = output_dir / "wrapper"
+    wrapper_adata = _subset_adata_for_foundation(
+        adata,
+        label_key=spec.label_key,
+        seed=seed,
+        max_cells=64,
+    )
+    wrapper_adata = _subset_foundation_genes(wrapper_adata, max_genes=48)
+    wrapper_runner = adapt_scgpt_annotation(
+        wrapper_adata,
+        label_key=spec.label_key,
+        strategies=("frozen_probe", "head"),
+        batch_size=16,
+        device="auto",
+        output_dir=wrapper_output_dir,
+    )
+    wrapper_save_dir = wrapper_runner.save(wrapper_output_dir / "best_model")
+    reloaded_runner = ScGPTAnnotationRunner.load(wrapper_save_dir, device="auto")
+    original_predictions = wrapper_runner.predict(wrapper_adata)
+    reloaded_predictions = reloaded_runner.predict(wrapper_adata)
+    reload_matches = bool(
+        np.array_equal(original_predictions["label_codes"], reloaded_predictions["label_codes"])
+        and np.allclose(
+            original_predictions["probabilities"],
+            reloaded_predictions["probabilities"],
+            atol=1e-6,
+        )
+    )
+    summary["wrapper_best_strategy"] = str(wrapper_runner.best_strategy_)
+    summary["wrapper_reload_match"] = reload_matches
+    summary["wrapper_manifest"] = _relative_artifact_dir(
+        output_dir,
+        str(wrapper_save_dir / "manifest.json"),
+    )
+    summary["wrapper_model_state"] = _relative_artifact_dir(
+        output_dir,
+        str(wrapper_save_dir / "model_state.pt"),
+    )
+    summary["wrapper_strategy_metrics"] = _relative_artifact_dir(
+        output_dir,
+        str(wrapper_output_dir / "strategy_metrics.csv"),
+    )
 
     (output_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     lines = [

@@ -82,6 +82,7 @@ What you get from this quickstart:
 - Custom model notebook: `examples/custom_model_extension.ipynb`
 - Experimental foundation notebook: `examples/scgpt_pbmc_embeddings.ipynb`
 - Experimental annotation fine-tuning notebook: `examples/scgpt_cell_type_annotation.ipynb`
+- Experimental dataset-specific wrapper notebook: `examples/scgpt_dataset_specific_annotation.ipynb`
 - Synthetic smoke examples: `examples/first_run_synthetic.ipynb`, `examples/first_run_synthetic.py`
 
 ## Why scDLKit
@@ -166,6 +167,7 @@ Additional Scanpy-first notebooks:
 - `examples/custom_model_extension.ipynb`: wrap a raw PyTorch autoencoder and train it through `Trainer`
 - `examples/scgpt_pbmc_embeddings.ipynb`: run the experimental frozen `whole-human` scGPT embedding workflow and return to Scanpy through `adata.obsm`
 - `examples/scgpt_cell_type_annotation.ipynb`: compare `PCA + logistic regression`, frozen scGPT, head-only tuning, and LoRA tuning for labeled PBMC annotation
+- `examples/scgpt_dataset_specific_annotation.ipynb`: use the new wrapper-first `adapt_scgpt_annotation(...)` flow on a second labeled PBMC dataset and save the best fitted runner
 
 The synthetic notebook and script are still available, but they are now the smoke-test path rather than the primary researcher onboarding flow:
 
@@ -232,6 +234,20 @@ from scdlkit.foundation import (
 )
 ```
 
+Experimental wrapper-first adaptation:
+
+```python
+from scdlkit.foundation import adapt_scgpt_annotation
+
+runner = adapt_scgpt_annotation(
+    adata,
+    label_key="cell_type",
+    output_dir="artifacts/scgpt_annotation",
+)
+runner.annotate_adata(adata)
+runner.save("artifacts/scgpt_annotation/best_model")
+```
+
 Comparison:
 
 ```python
@@ -268,6 +284,7 @@ benchmark = compare_models(
 - Adapter-based custom PyTorch model support through `Trainer`
 - Experimental scGPT frozen embedding support for human PBMC workflows
 - Experimental scGPT annotation fine-tuning for labeled human PBMC workflows through `Trainer`
+- Experimental wrapper-first scGPT dataset adaptation for users who want a simpler compare-predict-save loop
 
 Broader foundation-model support, full-backbone fine-tuning, spatial omics, and multimodal workflows remain future work once the gene-expression toolkit quality gates stay stable.
 
