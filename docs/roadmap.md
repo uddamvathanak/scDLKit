@@ -9,6 +9,7 @@ The tutorial and API-reference hardening milestone is complete enough to support
 Current goals:
 
 - keep the quickstart-first landing pages and tutorial learning path stable
+- expose fine-tuning and dataset adaptation earlier in the quickstart-facing docs for researchers with labeled data
 - preserve the hardened downstream Scanpy and reconstruction tutorials
 - keep the frozen scGPT bridge and annotation fine-tuning path experimental and inspectable
 - add easier wrapper-first adaptation workflows without weakening benchmark or tutorial quality gates
@@ -30,6 +31,13 @@ This means the public workflow is still centered on:
 - `Trainer` plus adapters for lower-level extension
 - experimental frozen and annotation-tuned scGPT workflows as a narrow foundation-model bridge
 - an easy wrapper-first scGPT annotation path for users who want a lower-code compare-predict-save loop
+
+For researcher-facing onboarding, the public story should also answer these questions quickly:
+
+- can I fine-tune on my labeled `AnnData` with very little code?
+- can I compare frozen versus tuned strategies without writing a custom training loop?
+- can I write predictions and embeddings back into `AnnData` and keep working in Scanpy?
+- can I save and reload the best adapted model for later use?
 
 ## Completed recently
 
@@ -53,6 +61,15 @@ Planned direction:
 - keep scGPT fine-tuning experimental, narrow, and easy to inspect through tutorials, reports, and wrapper artifacts
 - evaluate broader adaptation strategies only after they are benchmarked against the current baselines and frozen foundation path
 - defer broad foundation abstractions until the scGPT adaptation path is stable
+
+## Researcher adoption loop
+
+Near-term product and outreach work should stay close to the real researcher questions:
+
+- study what labeled-data users actually want from fine-tuning, adaptation, and model reuse
+- turn repeated user questions into quickstart examples, wrapper defaults, and short comparison tutorials
+- use public before-and-after examples, small benchmark tables, and low-code snippets to explain the value of scDLKit
+- share those concrete examples through repository docs, GitHub discussions, and short LinkedIn updates that point back to the quickstart and tutorial pages
 
 ## Deferred work
 

@@ -68,6 +68,38 @@ What you get from this quickstart:
 - training metrics and saved reports
 - a direct continuation path into Scanpy
 
+## Fine-Tuning Quickstart
+
+If your main goal is cell-type annotation on a labeled human `AnnData`, the experimental scGPT wrapper path is now also a first-class quickstart:
+
+```python
+from scdlkit.foundation import adapt_scgpt_annotation
+
+runner = adapt_scgpt_annotation(
+    adata,
+    label_key="cell_type",
+    output_dir="artifacts/scgpt_annotation",
+)
+
+runner.annotate_adata(adata, obs_key="scgpt_label", embedding_key="X_scgpt_best")
+runner.save("artifacts/scgpt_annotation/best_model")
+```
+
+This path is designed for researchers who want:
+
+- a low-code fine-tuning workflow
+- frozen versus tuned strategy comparison
+- predictions written back into `adata.obs`
+- latent embeddings written back into `adata.obsm`
+- a saved runner they can reload later
+
+This fine-tuning path is still experimental and intentionally narrow:
+
+- human scRNA-seq only
+- official scGPT `whole-human` checkpoint only
+- annotation only
+- frozen probe, head-only tuning, and LoRA only
+
 ## Start Here
 
 - Documentation site: https://uddamvathanak.github.io/scDLKit/
@@ -76,6 +108,7 @@ What you get from this quickstart:
 - Experimental foundation path: `python -m pip install "scdlkit[foundation,tutorials]"`
 - CPU and GPU use the same notebook path through `device="auto"`
 - Core learning path: quickstart -> downstream Scanpy -> comparison -> reconstruction sanity check
+- Researcher shortcut for labeled data: quickstart -> experimental scGPT cell-type annotation -> experimental dataset-specific annotation
 - Secondary notebooks: `examples/compare_models_pbmc.ipynb`, `examples/classification_demo.ipynb`
 - Downstream Scanpy notebook: `examples/downstream_scanpy_after_scdlkit.ipynb`
 - Reconstruction notebook: `examples/reconstruction_sanity_pbmc.ipynb`

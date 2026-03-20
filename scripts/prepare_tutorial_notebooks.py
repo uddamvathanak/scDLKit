@@ -48,6 +48,9 @@ ASSET_MAP = {
     "first_run_loss_curve.png": ROOT / "artifacts" / "first_run_notebook" / "loss_curve.png",
     "first_run_latent_pca.png": ROOT / "artifacts" / "first_run_notebook" / "latent_pca.png",
     "pbmc_vae_latent_umap.png": ROOT / "artifacts" / "pbmc_vae_quickstart" / "latent_umap.png",
+    "pbmc_downstream_leiden_umap.png": (
+        ROOT / "artifacts" / "downstream_scanpy_after_scdlkit" / "leiden_umap.png"
+    ),
     "pbmc_benchmark_comparison.png": (
         ROOT / "artifacts" / "pbmc_compare" / "benchmark_comparison.png"
     ),
