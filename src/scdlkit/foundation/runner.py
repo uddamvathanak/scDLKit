@@ -118,6 +118,29 @@ def _prediction_payload(
     }
 
 
+def _markdown_cell(value: Any) -> str:
+    if isinstance(value, (float, np.floating)):
+        numeric = float(value)
+        if np.isnan(numeric):
+            return ""
+        return f"{numeric:.4f}"
+    if isinstance(value, (int, np.integer)):
+        return str(int(value))
+    return str(value).replace("|", "\\|").replace("\n", "<br>")
+
+
+def _markdown_table(frame: pd.DataFrame) -> str:
+    headers = [str(column) for column in frame.columns]
+    lines = [
+        f"| {' | '.join(headers)} |",
+        f"| {' | '.join('---' for _ in headers)} |",
+    ]
+    for row in frame.itertuples(index=False, name=None):
+        cells = [_markdown_cell(value) for value in row]
+        lines.append(f"| {' | '.join(cells)} |")
+    return "\n".join(lines)
+
+
 def _default_min_gene_overlap(adata: AnnData) -> int:
     source = adata.raw.to_adata() if adata.raw is not None else adata
     return max(1, min(500, int(np.ceil(source.n_vars * 0.8))))
@@ -435,7 +458,7 @@ class ScGPTAnnotationRunner:
             [
                 "## Strategy comparison",
                 "",
-                strategy_metrics.to_markdown(index=False),
+                _markdown_table(strategy_metrics),
             ]
         )
         save_markdown_report(

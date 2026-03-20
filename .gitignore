@@ -11,6 +11,9 @@ docs/_tutorials/
 artifacts/
 data/
 examples/data/
+output/
+tmp/
+notes/
 *.egg-info/
 __pycache__/
 *.pyc
