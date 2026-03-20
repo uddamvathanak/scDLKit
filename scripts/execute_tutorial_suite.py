@@ -141,6 +141,44 @@ TUTORIAL_SPECS = (
         ),
     ),
     TutorialSpec(
+        name="scgpt_dataset_specific_annotation",
+        group="foundation",
+        source=ROOT / "examples" / "scgpt_dataset_specific_annotation.ipynb",
+        executed_stem="scgpt_dataset_specific_annotation",
+        required_artifacts=(
+            ROOT / "artifacts" / "scgpt_dataset_specific_annotation" / "report.md",
+            ROOT / "artifacts" / "scgpt_dataset_specific_annotation" / "report.csv",
+            ROOT / "artifacts" / "scgpt_dataset_specific_annotation" / "strategy_metrics.csv",
+            (
+                ROOT
+                / "artifacts"
+                / "scgpt_dataset_specific_annotation"
+                / "best_strategy_confusion_matrix.png"
+            ),
+            ROOT / "artifacts" / "scgpt_dataset_specific_annotation" / "frozen_embedding_umap.png",
+            (
+                ROOT
+                / "artifacts"
+                / "scgpt_dataset_specific_annotation"
+                / "best_strategy_embedding_umap.png"
+            ),
+            (
+                ROOT
+                / "artifacts"
+                / "scgpt_dataset_specific_annotation"
+                / "best_model"
+                / "manifest.json"
+            ),
+            (
+                ROOT
+                / "artifacts"
+                / "scgpt_dataset_specific_annotation"
+                / "best_model"
+                / "model_state.pt"
+            ),
+        ),
+    ),
+    TutorialSpec(
         name="synthetic_smoke",
         group="classic",
         source=ROOT / "examples" / "first_run_synthetic.ipynb",

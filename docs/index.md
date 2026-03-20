@@ -59,7 +59,8 @@ Follow this order if you want the tutorial set to build up like a coherent workf
 6. [Custom model extension](/_tutorials/custom_model_extension)
 7. [Experimental scGPT PBMC embeddings](/_tutorials/scgpt_pbmc_embeddings)
 8. [Experimental scGPT cell-type annotation](/_tutorials/scgpt_cell_type_annotation)
-9. [Synthetic smoke tutorial](/_tutorials/synthetic_smoke)
+9. [Experimental scGPT dataset-specific annotation](/_tutorials/scgpt_dataset_specific_annotation)
+10. [Synthetic smoke tutorial](/_tutorials/synthetic_smoke)
 
 ````{grid} 1 2 2 2
 :gutter: 3
@@ -104,6 +105,13 @@ Start with the public workflow APIs first, then drop into lower-level, custom-mo
 :link-type: doc
 
 Compare `PCA + logistic regression`, frozen scGPT, head-only tuning, and LoRA tuning on labeled PBMC data.
+```
+
+```{grid-item-card} Easy scGPT adaptation
+:link: _tutorials/scgpt_dataset_specific_annotation
+:link-type: doc
+
+Use the new wrapper-first path to inspect a labeled dataset, compare strategies, annotate `AnnData`, and save the best fitted runner.
 ```
 
 ```{grid-item-card} Scanpy integration map
@@ -156,6 +164,7 @@ guides/foundation-models
 guides/evaluation
 guides/visualization
 guides/comparison
+guides/annotation-on-your-data
 api/index
 contributing
 roadmap

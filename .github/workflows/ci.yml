@@ -137,7 +137,11 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e .[dev,tutorials,foundation]
       - name: Execute foundation annotation tutorial and validate artifacts
-        run: python scripts/execute_tutorial_suite.py --profile ci --only scgpt_cell_type_annotation --check
+        run: |
+          python scripts/execute_tutorial_suite.py \
+            --profile ci \
+            --only scgpt_cell_type_annotation scgpt_dataset_specific_annotation \
+            --check
       - name: Upload foundation annotation tutorial artifacts
         if: always()
         uses: actions/upload-artifact@v4

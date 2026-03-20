@@ -33,7 +33,9 @@ class ScGPTAnnotationModel(nn.Module):
         self.backbone = backbone
         self.checkpoint_id = checkpoint_id
         self.tuning_strategy = tuning_strategy
+        self.num_classes = num_classes
         self.label_categories = label_categories
+        self.classifier_dropout = classifier_dropout
         self.classifier_head = nn.Sequential(
             nn.LayerNorm(backbone.d_model),
             nn.Dropout(classifier_dropout),

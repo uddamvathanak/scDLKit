@@ -79,6 +79,23 @@ class ScGPTSplitData:
     num_genes_matched: int
 
 
+@dataclass(frozen=True, slots=True)
+class ScGPTAnnotationDataReport:
+    """Compatibility summary for experimental scGPT annotation workflows."""
+
+    checkpoint_id: str
+    label_key: str
+    num_cells: int
+    num_input_genes: int
+    num_genes_matched: int
+    gene_overlap_ratio: float
+    label_categories: tuple[str, ...]
+    class_counts: dict[str, int]
+    min_class_count: int
+    stratify_possible: bool
+    warnings: tuple[str, ...]
+
+
 class _ScGPTTokenSourceDataset(Dataset[dict[str, torch.Tensor]]):
     def __init__(
         self,
@@ -285,6 +302,121 @@ def _match_genes(
     return filtered_matrix, matched_gene_names, matched_vocab_ids
 
 
+def _count_class_labels(
+    adata: AnnData,
+    label_key: str,
+) -> tuple[tuple[str, ...], dict[str, int]]:
+    if label_key not in adata.obs:
+        msg = f"Label key '{label_key}' is not present in adata.obs."
+        raise ValueError(msg)
+    categories = pd.Categorical(adata.obs[label_key].astype(str))
+    label_categories = tuple(str(value) for value in categories.categories)
+    counts = pd.Series(categories).value_counts(sort=False)
+    class_counts = {
+        category: int(counts.get(category, 0))
+        for category in label_categories
+    }
+    return label_categories, class_counts
+
+
+def inspect_scgpt_annotation_data(
+    adata: AnnData,
+    *,
+    label_key: str,
+    checkpoint: str = DEFAULT_SCGPT_CHECKPOINT,
+    use_raw: bool = True,
+    min_gene_overlap: int = 500,
+    min_cells_per_class: int = 10,
+) -> ScGPTAnnotationDataReport:
+    """Inspect whether a dataset is a reasonable candidate for scGPT annotation.
+
+    Parameters
+    ----------
+    adata
+        Input single-cell dataset.
+    label_key
+        Categorical label column in ``adata.obs``.
+    checkpoint
+        scGPT checkpoint identifier. Only ``"whole-human"`` is supported
+        publicly at the moment.
+    use_raw
+        Use ``adata.raw`` when available.
+    min_gene_overlap
+        Warning threshold for matched genes against the scGPT vocabulary.
+    min_cells_per_class
+        Warning threshold for the smallest class size.
+
+    Returns
+    -------
+    ScGPTAnnotationDataReport
+        Lightweight compatibility report with overlap and class-balance checks.
+
+    Raises
+    ------
+    ValueError
+        If labels are missing or the expression matrix contains negative values.
+    """
+
+    _, _, vocab = _load_scgpt_assets(checkpoint)
+    expression_adata = _select_expression_adata(adata, use_raw=use_raw)
+    _validate_expression_values(expression_adata.X)
+    gene_names = [str(name) for name in expression_adata.var_names]
+    matched_mask = np.array(
+        [
+            (vocab_index is not None) and vocab_index >= 0
+            for vocab_index in (vocab.get(name) for name in gene_names)
+        ],
+        dtype=bool,
+    )
+    num_input_genes = int(len(gene_names))
+    num_genes_matched = int(matched_mask.sum())
+    overlap_ratio = (
+        float(num_genes_matched / num_input_genes)
+        if num_input_genes > 0
+        else 0.0
+    )
+    label_categories, class_counts = _count_class_labels(adata, label_key)
+    min_class_count = min(class_counts.values()) if class_counts else 0
+    stratify_possible = (
+        len(label_categories) > 1 and min_class_count >= max(2, min_cells_per_class)
+    )
+    warnings: list[str] = []
+    if num_genes_matched < min_gene_overlap:
+        warnings.append(
+            "Gene overlap with the scGPT checkpoint vocabulary is below the "
+            f"recommended threshold ({num_genes_matched} matched, recommended at least "
+            f"{min_gene_overlap})."
+        )
+    if len(label_categories) < 2:
+        warnings.append(
+            "Annotation adaptation expects at least two label categories. "
+            f"Observed {len(label_categories)}."
+        )
+    if min_class_count < min_cells_per_class:
+        warnings.append(
+            "The smallest label class is below the recommended size for stable tuning "
+            f"({min_class_count} cells, recommended at least {min_cells_per_class})."
+        )
+    if not stratify_possible:
+        warnings.append(
+            "Class counts are likely too sparse for strict stratified train/validation/test "
+            "splits with the default wrapper settings."
+        )
+    return ScGPTAnnotationDataReport(
+        checkpoint_id=checkpoint,
+        label_key=label_key,
+        num_cells=int(expression_adata.n_obs),
+        num_input_genes=num_input_genes,
+        num_genes_matched=num_genes_matched,
+        gene_overlap_ratio=overlap_ratio,
+        label_categories=label_categories,
+        class_counts=class_counts,
+        min_class_count=min_class_count,
+        stratify_possible=stratify_possible,
+        warnings=tuple(warnings),
+    )
+
+
 def prepare_scgpt_data(
     adata: AnnData,
     *,
@@ -315,7 +447,7 @@ def prepare_scgpt_data(
     collator = _ScGPTDataCollator(
         pad_token_id=vocab[str(config["pad_token"])],
         pad_value=int(config["pad_value"]),
-        max_length=int(config.get("max_seq_len", 1200)),
+        max_length=min(int(config.get("max_seq_len", 1200)), len(gene_names) + 1),
         n_bins=int(config.get("n_bins", 51)),
     )
     loader = DataLoader(source_dataset, batch_size=batch_size, shuffle=False, collate_fn=collator)

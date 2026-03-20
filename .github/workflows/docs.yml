@@ -80,7 +80,11 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e .[docs,tutorials,foundation]
       - name: Prepare foundation annotation tutorial notebook
-        run: python scripts/prepare_tutorial_notebooks.py --execute published --only scgpt_cell_type_annotation.ipynb --skip-assets
+        run: |
+          python scripts/prepare_tutorial_notebooks.py \
+            --execute published \
+            --only scgpt_cell_type_annotation.ipynb scgpt_dataset_specific_annotation.ipynb \
+            --skip-assets
       - name: Upload foundation annotation tutorial notebook
         uses: actions/upload-artifact@v4
         with:
