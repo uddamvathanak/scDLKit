@@ -71,6 +71,13 @@ Near-term product and outreach work should stay close to the real researcher que
 - use public before-and-after examples, small benchmark tables, and low-code snippets to explain the value of scDLKit
 - share those concrete examples through repository docs, GitHub discussions, and short LinkedIn updates that point back to the quickstart and tutorial pages
 
+## Immediate next tasks
+
+- validate the wrapper-first scGPT adaptation path cleanly on GitHub CI and docs builds
+- benchmark the dataset-specific annotation workflow on at least one additional labeled human dataset beyond the current PBMC path
+- tighten the wrapper defaults so the quickstart path stays low-code and predictable for researchers with limited coding experience
+- keep turning the most common researcher questions into short docs, comparison tables, and reusable examples
+
 ## Deferred work
 
 - spatial baseline support
