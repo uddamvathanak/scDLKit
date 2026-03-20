@@ -47,6 +47,22 @@ For reconstruction-capable models, scDLKit can also expose predicted or reconstr
 reconstructed = runner.reconstruct(adata)
 ```
 
+If your goal is labeled cell-type annotation rather than only an embedding, there is now a second quickstart path:
+
+```python
+from scdlkit.foundation import adapt_scgpt_annotation
+
+runner = adapt_scgpt_annotation(
+    adata,
+    label_key="cell_type",
+    output_dir="artifacts/scgpt_annotation",
+)
+runner.annotate_adata(adata)
+runner.save("artifacts/scgpt_annotation/best_model")
+```
+
+This wrapper-first path is still experimental, but it is the shortest public route for researchers who want to compare frozen and fine-tuned scGPT strategies on a labeled dataset.
+
 ## Learning path
 
 Follow this order if you want the tutorial set to build up like a coherent workflow rather than a pile of notebooks:
@@ -62,6 +78,12 @@ Follow this order if you want the tutorial set to build up like a coherent workf
 9. [Experimental scGPT dataset-specific annotation](/_tutorials/scgpt_dataset_specific_annotation)
 10. [Synthetic smoke tutorial](/_tutorials/synthetic_smoke)
 
+If you already have labels and your main question is annotation adaptation, the shorter researcher path is:
+
+1. [Scanpy PBMC quickstart](/_tutorials/scanpy_pbmc_quickstart)
+2. [Experimental scGPT cell-type annotation](/_tutorials/scgpt_cell_type_annotation)
+3. [Experimental scGPT dataset-specific annotation](/_tutorials/scgpt_dataset_specific_annotation)
+
 ````{grid} 1 2 2 2
 :gutter: 3
 
@@ -70,6 +92,13 @@ Follow this order if you want the tutorial set to build up like a coherent workf
 :link-type: doc
 
 Train the baseline VAE, save the embedding into `adata.obsm`, and keep the rest of the workflow in Scanpy.
+```
+
+```{grid-item-card} Fine-Tune On Labels
+:link: _tutorials/scgpt_dataset_specific_annotation
+:link-type: doc
+
+Use the wrapper-first experimental scGPT path to inspect a labeled dataset, compare frozen and tuned strategies, annotate `AnnData`, and save the best fitted runner.
 ```
 
 ```{grid-item-card} Interpret the embedding
@@ -136,10 +165,10 @@ Latent UMAP from the Scanpy PBMC quickstart. A healthy quickstart run should sep
 Benchmark comparison chart from the PBMC model-comparison tutorial.
 ```
 
-```{figure} _static/first_run_latent_pca.png
-:alt: Latent PCA from the synthetic smoke example
+```{figure} _static/pbmc_downstream_leiden_umap.png
+:alt: Leiden UMAP from the downstream Scanpy tutorial
 
-Minimal smoke-path latent embedding produced by the fallback synthetic walkthrough.
+Leiden-clustered UMAP from the downstream Scanpy workflow. This is a more realistic view of how researchers inspect cell-type structure after the scDLKit embedding step.
 ```
 
 ## Positioning

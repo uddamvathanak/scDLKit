@@ -2,6 +2,8 @@
 
 The tutorial path is intentionally Scanpy-first and model-focused.
 
+If you are coming in with labeled data and your main interest is fine-tuning, jump to the experimental scGPT annotation tutorials after the main PBMC quickstart.
+
 The goal is not to replace Scanpy’s preprocessing tutorials. The goal is to show where scDLKit enters the workflow, what outputs it creates, and how those outputs move back into normal Scanpy analysis.
 
 ## Core path
@@ -180,6 +182,14 @@ Report, loss curve, latent PCA.
 8. Experimental scGPT cell-type annotation
 9. Experimental scGPT dataset-specific annotation
 10. Synthetic smoke tutorial
+
+## Researcher shortcut
+
+Use this shorter route if your main question is how to adapt and fine-tune on a labeled dataset:
+
+1. Scanpy PBMC quickstart
+2. Experimental scGPT cell-type annotation
+3. Experimental scGPT dataset-specific annotation
 
 ```{toctree}
 :hidden:
