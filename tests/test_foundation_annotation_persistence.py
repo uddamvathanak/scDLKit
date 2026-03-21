@@ -104,6 +104,28 @@ def test_runner_save_and_load_round_trip_for_head_strategy(
     np.testing.assert_allclose(before["latent"], after["latent"], atol=1e-6)
 
 
+def test_loaded_runner_preserves_default_strategy_ladder(
+    scgpt_persistence_cache_dir: Path,
+    scgpt_persistence_adata: AnnData,
+    tmp_path: Path,
+) -> None:
+    runner = ScGPTAnnotationRunner(
+        label_key="louvain",
+        batch_size=8,
+        device="cpu",
+    )
+    runner.fit_compare(scgpt_persistence_adata)
+    save_dir = runner.save(tmp_path / "saved_default_runner")
+    loaded = ScGPTAnnotationRunner.load(
+        save_dir,
+        device="cpu",
+        cache_dir=scgpt_persistence_cache_dir,
+    )
+
+    assert runner.strategies == ("frozen_probe", "head")
+    assert loaded.strategies == ("frozen_probe", "head")
+
+
 def test_runner_save_and_load_round_trip_for_frozen_probe(
     scgpt_persistence_cache_dir: Path,
     scgpt_persistence_adata: AnnData,

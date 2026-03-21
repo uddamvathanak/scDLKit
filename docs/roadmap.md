@@ -4,11 +4,19 @@
 
 scDLKit is now in a cautious experimental adaptation phase with a stronger wrapper-first story.
 
-The tutorial and API-reference hardening milestone is complete enough to support the current public workflow, including the narrow experimental scGPT bridge. The immediate priority is to make that bridge easier to use on labeled user datasets without broadening the toolkit into a general framework too early.
+The immediate blocker before major new public features is documentation and ease-of-use hardening across the current public surface. A public feature is not considered complete unless it has:
+
+- at least one workflow tutorial
+- a real API contract page
+- parameter, return, and failure-mode expectations spelled out
+
+The narrow experimental scGPT bridge remains in scope, but it must satisfy the same documentation contract as the stable baseline path.
 
 Current goals:
 
 - keep the quickstart-first landing pages and tutorial learning path stable
+- make tutorial coverage and API-reference completeness a standing release gate
+- unify beginner discovery around a top-level experimental annotation quickstart
 - expose fine-tuning and dataset adaptation earlier in the quickstart-facing docs for researchers with labeled data
 - preserve the hardened downstream Scanpy and reconstruction tutorials
 - keep the frozen scGPT bridge and annotation fine-tuning path experimental and inspectable
@@ -28,6 +36,7 @@ The current public story is:
 This means the public workflow is still centered on:
 
 - `TaskRunner` for the main beginner path
+- `adapt_annotation(...)` as the easiest experimental annotation path
 - `Trainer` plus adapters for lower-level extension
 - experimental frozen and annotation-tuned scGPT workflows as a narrow foundation-model bridge
 - an easy wrapper-first scGPT annotation path for users who want a lower-code compare-predict-save loop
@@ -49,6 +58,7 @@ For researcher-facing onboarding, the public story should also answer these ques
 - an experimental frozen scGPT embedding bridge
 - an experimental annotation-only scGPT fine-tuning path through `Trainer`
 - an easy dataset-specific scGPT annotation wrapper that compares strategies and saves the best fitted runner
+- a unified top-level experimental annotation quickstart alias for easier beginner discovery
 
 ## Next feature phase
 
@@ -59,6 +69,7 @@ Planned direction:
 - keep adapter-based support for user-supplied PyTorch modules through `Trainer`
 - keep the built-in registry path for bundled baselines unchanged
 - keep scGPT fine-tuning experimental, narrow, and easy to inspect through tutorials, reports, and wrapper artifacts
+- keep the beginner annotation path low-code and CPU-practical by default
 - evaluate broader adaptation strategies only after they are benchmarked against the current baselines and frozen foundation path
 - defer broad foundation abstractions until the scGPT adaptation path is stable
 
@@ -73,9 +84,9 @@ Near-term product and outreach work should stay close to the real researcher que
 
 ## Immediate next tasks
 
-- validate the wrapper-first scGPT adaptation path cleanly on GitHub CI and docs builds
+- validate the new top-level experimental annotation alias path cleanly on GitHub CI and docs builds
+- keep the default quickstart ladder on `frozen_probe` plus `head` unless runtime and usability data justify broadening it
 - benchmark the dataset-specific annotation workflow on at least one additional labeled human dataset beyond the current PBMC path
-- tighten the wrapper defaults so the quickstart path stays low-code and predictable for researchers with limited coding experience
 - keep turning the most common researcher questions into short docs, comparison tables, and reusable examples
 
 ## Deferred work
@@ -88,3 +99,17 @@ Near-term product and outreach work should stay close to the real researcher que
 - scverse ecosystem submission before the public workflow is easier to evaluate
 
 Documentation quality remains a release gate, but it is no longer the only active phase. The main priority is still a trustworthy, teachable baseline toolkit rather than a broad single-cell framework.
+
+## Documentation contract
+
+Until the current surface is fully backfilled, no major new public feature should land without an explicit short-lived exception.
+
+The standing policy is:
+
+- every public feature needs at least one workflow tutorial
+- every public feature needs an API contract page
+- stable and experimental features are held to the same documentation standard
+- public docs must make the right entrypoint obvious:
+  - embeddings: `TaskRunner`
+  - labeled annotation adaptation: `adapt_annotation(...)`
+  - lower-level customization: `Trainer` plus explicit helpers

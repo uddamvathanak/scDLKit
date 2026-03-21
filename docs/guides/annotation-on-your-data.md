@@ -2,6 +2,11 @@
 
 Use this guide when you have a labeled human `AnnData` object and want the easiest public path for experimental scGPT adaptation.
 
+Related APIs:
+
+- [Experimental annotation quickstart API](../api/annotation.md)
+- [Experimental foundation helpers](../api/foundation.md)
+
 The current scope is still narrow:
 
 - human scRNA-seq only
@@ -31,9 +36,9 @@ For the current experimental wrapper, the most important fields are:
 Run the inspection step before training:
 
 ```python
-from scdlkit.foundation import inspect_scgpt_annotation_data
+from scdlkit import inspect_annotation_data
 
-report = inspect_scgpt_annotation_data(
+report = inspect_annotation_data(
     adata,
     label_key="cell_type",
     checkpoint="whole-human",
@@ -53,9 +58,9 @@ If the report shows low overlap or very small classes, the wrapper may still run
 ## Fastest adaptation path
 
 ```python
-from scdlkit.foundation import adapt_scgpt_annotation
+from scdlkit import adapt_annotation
 
-runner = adapt_scgpt_annotation(
+runner = adapt_annotation(
     adata,
     label_key="cell_type",
     output_dir="artifacts/scgpt_annotation",
@@ -66,9 +71,11 @@ This one call:
 
 - inspects the dataset
 - prepares and splits the tokenized data
-- compares frozen probe, head-only tuning, and LoRA tuning
+- compares frozen probe and head-only tuning by default
 - keeps the best fitted strategy
 - writes the standard artifact bundle
+
+LoRA remains available by explicit opt-in through `strategies=("frozen_probe", "head", "lora")`.
 
 ## Write results back into `AnnData`
 
@@ -94,9 +101,9 @@ That keeps the downstream Scanpy handoff simple.
 ```python
 save_dir = runner.save("artifacts/scgpt_annotation/best_model")
 
-from scdlkit.foundation import ScGPTAnnotationRunner
+from scdlkit import AnnotationRunner
 
-reloaded = ScGPTAnnotationRunner.load(save_dir, device="auto")
+reloaded = AnnotationRunner.load(save_dir, device="auto")
 ```
 
 The saved directory contains:
@@ -130,3 +137,5 @@ Drop down to the `Trainer` path when you want:
 - no claim that scGPT always beats classical baselines
 
 The main product value of this path is not universal superiority. It is the ability to compare adaptation strategies on your own labeled dataset with a reproducible, Scanpy-compatible workflow.
+
+Under the hood, this top-level beginner path is still backed by the experimental scGPT `whole-human` workflow in `scdlkit.foundation`.

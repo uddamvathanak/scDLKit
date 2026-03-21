@@ -168,6 +168,11 @@ def test_runner_fit_compare_populates_summary_and_predicts(
     assert (output_dir / "best_strategy_embedding_umap.png").exists()
 
 
+def test_runner_defaults_to_frozen_probe_and_head() -> None:
+    runner = ScGPTAnnotationRunner(label_key="louvain")
+    assert runner.strategies == ("frozen_probe", "head")
+
+
 def test_adapt_scgpt_annotation_returns_fitted_runner(
     scgpt_runner_cache_dir: Path,
     scgpt_runner_adata: AnnData,
@@ -176,7 +181,6 @@ def test_adapt_scgpt_annotation_returns_fitted_runner(
     runner = adapt_scgpt_annotation(
         scgpt_runner_adata,
         label_key="louvain",
-        strategies=("frozen_probe", "head"),
         batch_size=8,
         device="cpu",
         output_dir=tmp_path / "one_shot",
@@ -184,3 +188,4 @@ def test_adapt_scgpt_annotation_returns_fitted_runner(
     assert isinstance(runner, ScGPTAnnotationRunner)
     assert runner.summary_ is not None
     assert runner.best_strategy_ in {"frozen_probe", "head"}
+    assert runner.strategies == ("frozen_probe", "head")

@@ -2,6 +2,11 @@
 
 `scDLKit` now includes an experimental scGPT path for human scRNA-seq workflows.
 
+Related APIs:
+
+- [Experimental annotation quickstart API](../api/annotation.md)
+- [Experimental foundation helpers](../api/foundation.md)
+
 The public scope is still deliberately narrow:
 
 - official `whole-human` checkpoint only
@@ -37,12 +42,12 @@ This is the bridge between the baseline toolkit and later foundation-model adapt
 
 ## Easiest wrapper-first path
 
-If you want the smallest amount of code, start here:
+If you want the smallest amount of code, start with the top-level experimental alias:
 
 ```python
-from scdlkit.foundation import adapt_scgpt_annotation
+from scdlkit import adapt_annotation
 
-runner = adapt_scgpt_annotation(
+runner = adapt_annotation(
     adata,
     label_key="cell_type",
     output_dir="artifacts/scgpt_annotation",
@@ -55,19 +60,21 @@ runner.save("artifacts/scgpt_annotation/best_model")
 This wrapper:
 
 - inspects the labeled dataset
-- compares frozen probe, head-only tuning, and LoRA tuning
+- compares frozen probe and head-only tuning by default
 - keeps the best fitted strategy in memory
 - writes standard report artifacts
 - makes it easy to annotate `AnnData` and save the best fitted runner
 
+LoRA remains available by explicit opt-in through `strategies=("frozen_probe", "head", "lora")`.
+
 ## Inspect before training
 
-For user-supplied datasets, inspect first:
+For user-supplied datasets, inspect first through the top-level beginner alias:
 
 ```python
-from scdlkit.foundation import inspect_scgpt_annotation_data
+from scdlkit import inspect_annotation_data
 
-report = inspect_scgpt_annotation_data(
+report = inspect_annotation_data(
     adata,
     label_key="cell_type",
     checkpoint="whole-human",
@@ -143,19 +150,19 @@ adata.obsm["X_scgpt_lora"] = predictions["latent"]
 ## Wrapper class for advanced convenience
 
 If you want the easy path but still need explicit control over the fitted object,
-use the runner directly:
+use the top-level runner alias directly:
 
 ```python
-from scdlkit.foundation import ScGPTAnnotationRunner
+from scdlkit import AnnotationRunner
 
-runner = ScGPTAnnotationRunner(label_key="cell_type", output_dir="artifacts/scgpt_annotation")
+runner = AnnotationRunner(label_key="cell_type", output_dir="artifacts/scgpt_annotation")
 runner.inspect(adata)
 runner.fit_compare(adata)
 runner.annotate_adata(adata)
 runner.save("artifacts/scgpt_annotation/best_model")
 ```
 
-The lower-level `Trainer` path remains the advanced public surface underneath the wrapper.
+The lower-level `Trainer` path and `scdlkit.foundation` helpers remain the advanced public surface underneath the wrapper.
 
 ## When to use each strategy
 
@@ -197,3 +204,5 @@ The goal is not to claim that foundation models always beat classical baselines.
 - LoRA tuning
 
 That comparison story is the main product value of the current foundation release line.
+
+Treat `scdlkit.foundation` as the explicit lower-level experimental namespace that sits underneath the easier top-level beginner aliases.

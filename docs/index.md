@@ -41,6 +41,14 @@ sc.tl.umap(adata)
 sc.pl.umap(adata, color="louvain")
 ```
 
+Use this route when your goal is a stable embedding baseline.
+
+Related docs:
+
+- [TaskRunner API](./api/taskrunner.md)
+- [Scanpy PBMC quickstart](/_tutorials/scanpy_pbmc_quickstart)
+- [Downstream Scanpy after scDLKit](/_tutorials/downstream_scanpy_after_scdlkit)
+
 For reconstruction-capable models, scDLKit can also expose predicted or reconstructed expression values directly:
 
 ```python
@@ -50,9 +58,9 @@ reconstructed = runner.reconstruct(adata)
 If your goal is labeled cell-type annotation rather than only an embedding, there is now a second quickstart path:
 
 ```python
-from scdlkit.foundation import adapt_scgpt_annotation
+from scdlkit import adapt_annotation
 
-runner = adapt_scgpt_annotation(
+runner = adapt_annotation(
     adata,
     label_key="cell_type",
     output_dir="artifacts/scgpt_annotation",
@@ -61,7 +69,15 @@ runner.annotate_adata(adata)
 runner.save("artifacts/scgpt_annotation/best_model")
 ```
 
-This wrapper-first path is still experimental, but it is the shortest public route for researchers who want to compare frozen and fine-tuned scGPT strategies on a labeled dataset.
+This wrapper-first path is still experimental, but it is the shortest public route for researchers who want to compare frozen and fine-tuned scGPT strategies on a labeled dataset. The default quickstart compares `frozen_probe` and `head`; LoRA stays opt-in.
+
+Use this route when your goal is labeled annotation adaptation with minimal code.
+
+Related docs:
+
+- [Experimental annotation quickstart API](./api/annotation.md)
+- [Experimental scGPT dataset-specific annotation](/_tutorials/scgpt_dataset_specific_annotation)
+- [Experimental foundation helpers](./api/foundation.md)
 
 ## Learning path
 

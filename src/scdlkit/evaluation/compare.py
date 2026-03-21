@@ -58,6 +58,17 @@ def compare_models(
     -------
     BenchmarkResult
         Metrics table, fitted runners, and optional artifact paths.
+
+    Raises
+    ------
+    ValueError
+        Propagated from the underlying ``TaskRunner`` flows when a model/task
+        combination is invalid.
+
+    Notes
+    -----
+    This helper is intended for bundled stable baselines. It is not the public
+    scGPT adaptation benchmark surface.
     """
 
     from scdlkit.runner import TaskRunner

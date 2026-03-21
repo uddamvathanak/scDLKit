@@ -26,6 +26,12 @@ def save_metrics_table(metrics: dict[str, Any], path: str | Path) -> Path:
     -------
     pathlib.Path
         The written CSV path.
+
+    Notes
+    -----
+    Only scalar metrics are written to the CSV table. Structured values such as
+    confusion matrices remain in the Markdown report or in the original metric
+    dictionary.
     """
 
     output = Path(path)
@@ -58,6 +64,11 @@ def save_markdown_report(
     -------
     pathlib.Path
         The written Markdown report path.
+
+    Notes
+    -----
+    Markdown reports include both scalar and structured values. Extra sections
+    are appended verbatim after the main metrics block.
     """
 
     output = Path(path)
