@@ -7,6 +7,11 @@ The most important framing is simple:
 - Scanpy still owns the single-cell analysis workflow.
 - scDLKit provides the model-training, evaluation, comparison, and output-handoff layer.
 
+If you want the full preprocessing-plus-clustering story, start with the official
+Scanpy basics tutorial:
+
+- <https://scanpy.readthedocs.io/en/stable/tutorials/basics/clustering.html>
+
 ## Minimal integration pattern
 
 ```python
