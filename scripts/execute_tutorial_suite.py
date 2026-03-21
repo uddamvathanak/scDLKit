@@ -11,8 +11,8 @@ from time import perf_counter
 
 import nbformat
 from nbconvert.preprocessors import ExecutePreprocessor
+from tutorial_catalog import ROOT
 
-ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS_DIR = ROOT / "artifacts"
 NOTEBOOK_ARTIFACTS_DIR = ARTIFACTS_DIR / "notebooks"
 SUMMARY_DIR = ARTIFACTS_DIR / "tutorial_validation"
