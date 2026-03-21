@@ -84,10 +84,10 @@ Near-term product and outreach work should stay close to the real researcher que
 
 ## Immediate next tasks
 
-- validate the new top-level experimental annotation alias path cleanly on GitHub CI and docs builds
+- ship and stage the `0.1.6` release batch with the unified experimental annotation quickstart and docs contract checks
 - keep the default quickstart ladder on `frozen_probe` plus `head` unless runtime and usability data justify broadening it
 - benchmark the dataset-specific annotation workflow on at least one additional labeled human dataset beyond the current PBMC path
-- keep turning the most common researcher questions into short docs, comparison tables, and reusable examples
+- keep turning the most common researcher questions into short docs, comparison tables, reusable examples, and release-facing evidence
 
 ## Deferred work
 
