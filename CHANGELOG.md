@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.6
+
+- Added a unified experimental annotation quickstart at the top-level package with `adapt_annotation(...)`, `inspect_annotation_data(...)`, and `AnnotationRunner`.
+- Added a wrapper-first scGPT annotation adaptation workflow that supports inspect, compare, annotate, save, and reload behavior around labeled human `AnnData`.
+- Tightened the beginner default strategy ladder to `frozen_probe` plus `head`, while keeping LoRA available by explicit opt-in.
+- Hardened wrapper reporting, saved-runner behavior, and the foundation annotation smoke path for the new beginner alias route.
+- Added a docs contract registry, stricter API contract pages, tutorial-to-API linking, and CI/docs enforcement for public feature completeness.
+- Decoupled the docs contract checker from notebook-only dependencies through a lightweight shared tutorial catalog so lean CI jobs stay installable.
+
 ## 0.1.5
 
 - Added `scdlkit.foundation` with an experimental frozen scGPT embedding path for the official `whole-human` checkpoint.

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scdlkit"
-version = "0.1.5"
+version = "0.1.6"
 description = "AnnData-native deep learning baselines for single-cell data."
 readme = "README.md"
 license = "MIT"

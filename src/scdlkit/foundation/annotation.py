@@ -140,7 +140,7 @@ def load_scgpt_annotation_model(
         Number of annotation classes.
     checkpoint
         scGPT checkpoint identifier. ``"whole-human"`` is the only supported
-        public checkpoint in ``v0.1.5``.
+        public checkpoint in the current experimental release line.
     tuning_strategy
         Either ``"head"`` or ``"lora"``.
     label_categories

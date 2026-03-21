@@ -27,7 +27,8 @@ class ScGPTLoRAConfig:
     dropout
         Dropout applied to LoRA inputs for supported wrapped linear layers.
     target_modules
-        Supported transformer-layer modules to wrap in ``v0.1.5``.
+        Supported transformer-layer modules to wrap in the current experimental
+        release line.
     """
 
     rank: int = 8
