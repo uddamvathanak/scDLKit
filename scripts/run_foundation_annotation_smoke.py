@@ -24,7 +24,8 @@ from run_quality_suite import (  # noqa: E402
     run_scgpt_annotation_strategy,
 )
 
-from scdlkit.foundation import ScGPTAnnotationRunner, adapt_scgpt_annotation  # noqa: E402
+from scdlkit import AnnotationRunner, adapt_annotation, inspect_annotation_data  # noqa: E402
+from scdlkit.foundation import ScGPTAnnotationRunner  # noqa: E402
 
 
 def _relative_artifact_dir(output_dir: Path, artifact_dir: str) -> str:
@@ -101,16 +102,27 @@ def main() -> None:
         max_cells=64,
     )
     wrapper_adata = _subset_foundation_genes(wrapper_adata, max_genes=48)
-    wrapper_runner = adapt_scgpt_annotation(
+    inspection = inspect_annotation_data(
         wrapper_adata,
         label_key=spec.label_key,
-        strategies=("frozen_probe", "head"),
+        checkpoint="whole-human",
+        min_gene_overlap=min(16, wrapper_adata.n_vars),
+    )
+    wrapper_runner = adapt_annotation(
+        wrapper_adata,
+        label_key=spec.label_key,
         batch_size=16,
         device="auto",
         output_dir=wrapper_output_dir,
     )
+    if not isinstance(wrapper_runner, ScGPTAnnotationRunner):
+        msg = "Top-level annotation alias no longer returns the expected wrapper type."
+        raise RuntimeError(msg)
+    if wrapper_runner.strategies != ("frozen_probe", "head"):
+        msg = "Top-level annotation alias no longer uses the expected default strategy ladder."
+        raise RuntimeError(msg)
     wrapper_save_dir = wrapper_runner.save(wrapper_output_dir / "best_model")
-    reloaded_runner = ScGPTAnnotationRunner.load(wrapper_save_dir, device="auto")
+    reloaded_runner = AnnotationRunner.load(wrapper_save_dir, device="auto")
     original_predictions = wrapper_runner.predict(wrapper_adata)
     reloaded_predictions = reloaded_runner.predict(wrapper_adata)
     reload_matches = bool(
@@ -121,6 +133,10 @@ def main() -> None:
             atol=1e-6,
         )
     )
+    summary["wrapper_alias_class"] = type(wrapper_runner).__name__
+    summary["wrapper_default_strategies"] = list(wrapper_runner.strategies)
+    summary["inspection_num_genes_matched"] = int(inspection.num_genes_matched)
+    summary["inspection_stratify_possible"] = bool(inspection.stratify_possible)
     summary["wrapper_best_strategy"] = str(wrapper_runner.best_strategy_)
     summary["wrapper_reload_match"] = reload_matches
     summary["wrapper_manifest"] = _relative_artifact_dir(

@@ -4,7 +4,7 @@ The tutorial path is intentionally Scanpy-first and model-focused.
 
 If you are coming in with labeled data and your main interest is fine-tuning, jump to the experimental scGPT annotation tutorials after the main PBMC quickstart.
 
-The goal is not to replace Scanpy’s preprocessing tutorials. The goal is to show where scDLKit enters the workflow, what outputs it creates, and how those outputs move back into normal Scanpy analysis.
+The goal is not to replace Scanpy's preprocessing tutorials. The goal is to show where scDLKit enters the workflow, what outputs it creates, and how those outputs move back into normal Scanpy analysis.
 
 ## Core path
 
@@ -23,6 +23,9 @@ How do I train a first model and get an embedding back into `adata.obsm`?
 
 Outputs:
 Latent embedding, report, loss curve, latent UMAP.
+
+Related APIs:
+[TaskRunner](/api/taskrunner), [Data preparation](/api/data)
 ```
 
 ```{grid-item-card} Downstream Scanpy after scDLKit
@@ -37,6 +40,9 @@ What should I do in Scanpy after scDLKit has produced an embedding?
 
 Outputs:
 Latent UMAP, Leiden UMAP, marker dotplot, ranked markers, downstream report.
+
+Related APIs:
+[TaskRunner](/api/taskrunner)
 ```
 ````
 
@@ -57,6 +63,9 @@ Does `PCA` already solve enough of the problem, or does a deeper model buy usefu
 
 Outputs:
 Benchmark CSV, comparison figure, PCA reference UMAP, best baseline UMAP.
+
+Related APIs:
+[Evaluation and outputs](/api/evaluation), [TaskRunner](/api/taskrunner)
 ```
 
 ```{grid-item-card} Reconstruction sanity check
@@ -71,6 +80,9 @@ How do I retrieve reconstructed expression, and what is a reasonable sanity chec
 
 Outputs:
 Report, loss curve, reconstruction scatter, gene-panel reconstruction summary.
+
+Related APIs:
+[TaskRunner](/api/taskrunner), [Evaluation and outputs](/api/evaluation)
 ```
 ````
 
@@ -91,6 +103,9 @@ What does a lightweight classifier baseline look like in the same toolkit?
 
 Outputs:
 Report, loss curve, confusion matrix.
+
+Related APIs:
+[TaskRunner](/api/taskrunner), [Evaluation and outputs](/api/evaluation)
 ```
 
 ```{grid-item-card} Custom model extension
@@ -105,6 +120,9 @@ How do I validate a wrapped custom model inside scDLKit before building on top o
 
 Outputs:
 Report, loss curve, latent UMAP.
+
+Related APIs:
+[Trainer](/api/trainer), [Adapters](/api/adapters)
 ```
 
 ```{grid-item-card} Experimental scGPT PBMC embeddings
@@ -119,6 +137,9 @@ How do I extract frozen scGPT embeddings and return them to Scanpy?
 
 Outputs:
 Report, latent UMAP, frozen linear-probe confusion matrix, embedding summary.
+
+Related APIs:
+[Experimental foundation helpers](/api/foundation)
 ```
 
 ```{grid-item-card} Experimental scGPT cell-type annotation
@@ -133,6 +154,9 @@ Do I need only frozen scGPT embeddings, a trainable classification head, or LoRA
 
 Outputs:
 Report, strategy metrics table, frozen UMAP, LoRA UMAP, best-strategy confusion matrix.
+
+Related APIs:
+[Experimental foundation helpers](/api/foundation), [Experimental annotation quickstart API](/api/annotation)
 ```
 
 ```{grid-item-card} Experimental scGPT dataset-specific annotation
@@ -147,6 +171,9 @@ How do I inspect my dataset, compare strategies, annotate `AnnData`, and save th
 
 Outputs:
 Report, strategy metrics table, frozen UMAP, best-strategy UMAP, saved runner manifest, saved runner weights.
+
+Related APIs:
+[Experimental annotation quickstart API](/api/annotation), [Experimental foundation helpers](/api/foundation)
 ```
 ````
 
@@ -167,6 +194,9 @@ Can I smoke-test the basic workflow with minimal setup?
 
 Outputs:
 Report, loss curve, latent PCA.
+
+Related APIs:
+[TaskRunner](/api/taskrunner)
 ```
 ````
 

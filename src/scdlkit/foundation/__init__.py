@@ -5,6 +5,8 @@ The current public scope is intentionally narrow:
 - frozen scGPT embedding extraction
 - experimental scGPT annotation tuning for cell-type labels
 - wrapper-first experimental scGPT dataset adaptation
+- top-level ``scdlkit.adapt_annotation`` and ``scdlkit.AnnotationRunner`` are
+  the easiest public entrypoints
 - human single-cell RNA data only
 - Scanpy handoff through ``adata.obsm``
 

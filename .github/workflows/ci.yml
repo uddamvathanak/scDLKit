@@ -28,6 +28,8 @@ jobs:
           python -m pip install -e .[dev,foundation]
       - name: Ruff
         run: ruff check .
+      - name: Docs contract check
+        run: python scripts/check_feature_docs_contracts.py --check
       - name: Mypy
         run: mypy src
       - name: Pytest

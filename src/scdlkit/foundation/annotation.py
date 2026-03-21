@@ -14,7 +14,29 @@ from scdlkit.utils import resolve_device
 
 
 class ScGPTAnnotationModel(nn.Module):
-    """scGPT-based classifier for experimental cell-type annotation tuning."""
+    """scGPT-based classifier for experimental cell-type annotation tuning.
+
+    Parameters
+    ----------
+    backbone
+        Loaded scGPT backbone used for token embedding and pooling.
+    checkpoint_id
+        Source checkpoint identifier.
+    tuning_strategy
+        Either ``"head"`` or ``"lora"``.
+    num_classes
+        Number of annotation classes.
+    label_categories
+        Optional class-name order used for reporting and confusion matrices.
+    classifier_dropout
+        Dropout applied before the final classification layer.
+
+    Notes
+    -----
+    ``predict_batch(...)`` returns both ``logits`` and normalized ``latent``
+    embeddings so the same model can support classification metrics and
+    downstream Scanpy handoff.
+    """
 
     supported_tasks: tuple[str, ...] = ("classification",)
     supports_training = True

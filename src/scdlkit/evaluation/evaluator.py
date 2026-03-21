@@ -18,10 +18,10 @@ def evaluate_predictions(task: str, predictions: dict[str, np.ndarray]) -> dict[
 
     Parameters
     ----------
-    task:
+    task
         Task name. Supported public values are ``"representation"``,
         ``"reconstruction"``, and ``"classification"``.
-    predictions:
+    predictions
         Dictionary returned by :meth:`scdlkit.training.trainer.Trainer.predict_dataset`
         or an equivalent workflow. Expected keys depend on the task:
 
@@ -43,6 +43,11 @@ def evaluate_predictions(task: str, predictions: dict[str, np.ndarray]) -> dict[
     -----
     Representation evaluation reuses reconstruction metrics when both the input
     matrix and reconstructed values are available.
+
+    Examples
+    --------
+    >>> evaluate_predictions("classification", {"y": y_true, "logits": logits})["accuracy"] >= 0.0
+    True
     """
 
     if task == "classification":

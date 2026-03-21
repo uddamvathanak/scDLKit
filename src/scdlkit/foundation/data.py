@@ -51,7 +51,27 @@ def _bin_row(
 
 @dataclass(frozen=True, slots=True)
 class ScGPTPreparedData:
-    """Tokenized dataset and metadata for scGPT workflows."""
+    """Tokenized dataset and metadata for scGPT workflows.
+
+    Attributes
+    ----------
+    dataset
+        Materialized token dataset that yields scGPT-ready batch dictionaries.
+    gene_names
+        Ordered matched gene names retained after vocabulary filtering.
+    checkpoint_id
+        Checkpoint identifier used during preparation.
+    label_key
+        Source ``adata.obs`` column used for label encoding, if any.
+    label_categories
+        Encoded class-name order used for annotation reporting.
+    batch_size
+        Recommended batch size carried into inference or training helpers.
+    num_cells
+        Number of cells represented in the prepared dataset.
+    num_genes_matched
+        Number of genes matched to the checkpoint vocabulary.
+    """
 
     dataset: Dataset[dict[str, torch.Tensor]]
     gene_names: tuple[str, ...]
@@ -65,7 +85,27 @@ class ScGPTPreparedData:
 
 @dataclass(frozen=True, slots=True)
 class ScGPTSplitData:
-    """Train, validation, and test datasets for scGPT annotation workflows."""
+    """Train, validation, and test datasets for scGPT annotation workflows.
+
+    Attributes
+    ----------
+    train, val, test
+        Tokenized split datasets ready for ``Trainer`` or wrapper workflows.
+    checkpoint_id
+        Checkpoint identifier used during preparation.
+    label_key
+        Source ``adata.obs`` column used for label encoding, if any.
+    label_categories
+        Encoded class-name order used for reporting and confusion-matrix labels.
+    gene_names
+        Ordered matched gene names retained after vocabulary filtering.
+    batch_size
+        Recommended batch size carried into inference or training helpers.
+    num_cells
+        Total number of cells in the original prepared dataset.
+    num_genes_matched
+        Number of genes matched to the checkpoint vocabulary.
+    """
 
     train: Dataset[dict[str, torch.Tensor]]
     val: Dataset[dict[str, torch.Tensor]] | None
@@ -81,7 +121,33 @@ class ScGPTSplitData:
 
 @dataclass(frozen=True, slots=True)
 class ScGPTAnnotationDataReport:
-    """Compatibility summary for experimental scGPT annotation workflows."""
+    """Compatibility summary for experimental scGPT annotation workflows.
+
+    Attributes
+    ----------
+    checkpoint_id
+        Checkpoint identifier used for the overlap check.
+    label_key
+        Label column inspected in ``adata.obs``.
+    num_cells
+        Number of cells in the inspected dataset.
+    num_input_genes
+        Number of input genes before checkpoint matching.
+    num_genes_matched
+        Number of genes matched against the checkpoint vocabulary.
+    gene_overlap_ratio
+        Fraction of input genes that matched the checkpoint vocabulary.
+    label_categories
+        Observed categorical label order.
+    class_counts
+        Cell counts per label category.
+    min_class_count
+        Size of the smallest observed label category.
+    stratify_possible
+        Whether class counts are likely sufficient for strict stratified splits.
+    warnings
+        Human-readable preflight warnings for likely issues.
+    """
 
     checkpoint_id: str
     label_key: str
@@ -349,7 +415,8 @@ def inspect_scgpt_annotation_data(
     Returns
     -------
     ScGPTAnnotationDataReport
-        Lightweight compatibility report with overlap and class-balance checks.
+        Lightweight compatibility report with overlap, class-balance, and
+        stratification checks.
 
     Raises
     ------
@@ -426,7 +493,36 @@ def prepare_scgpt_data(
     use_raw: bool = True,
     min_gene_overlap: int = 500,
 ) -> ScGPTPreparedData:
-    """Prepare tokenized data for frozen scGPT embedding inference."""
+    """Prepare tokenized data for frozen scGPT embedding inference.
+
+    Parameters
+    ----------
+    adata
+        Human single-cell ``AnnData`` to tokenize.
+    checkpoint
+        Experimental scGPT checkpoint identifier. The public route currently
+        supports only ``"whole-human"``.
+    label_key
+        Optional label column in ``adata.obs`` for annotation workflows.
+    batch_size
+        Batch size used while materializing the token tensors.
+    use_raw
+        Use ``adata.raw`` when available.
+    min_gene_overlap
+        Minimum number of genes that must match the checkpoint vocabulary.
+
+    Returns
+    -------
+    ScGPTPreparedData
+        Tokenized tensors plus metadata needed for frozen embedding inference or
+        downstream annotation splitting.
+
+    Raises
+    ------
+    ValueError
+        If labels are missing, expression values are negative, or gene overlap
+        is insufficient for the checkpoint vocabulary.
+    """
 
     _, config, vocab = _load_scgpt_assets(checkpoint)
     expression_adata = _select_expression_adata(adata, use_raw=use_raw)

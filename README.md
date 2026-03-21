@@ -10,6 +10,12 @@
 
 Train, evaluate, compare, and visualize baseline deep-learning models for single-cell data without writing PyTorch from scratch.
 
+Choose the entrypoint by user goal:
+
+- stable embeddings and baseline models: `TaskRunner`
+- experimental labeled annotation adaptation: `adapt_annotation(...)`
+- lower-level control and custom models: `Trainer` plus adapters
+
 ## Quick Start
 
 Start here if you want the shortest path from `AnnData` to a learned embedding and, for reconstruction-capable models, predicted or reconstructed gene-expression values:
@@ -68,14 +74,19 @@ What you get from this quickstart:
 - training metrics and saved reports
 - a direct continuation path into Scanpy
 
+Related docs:
+
+- Tutorial: [Scanpy PBMC quickstart](https://uddamvathanak.github.io/scDLKit/_tutorials/scanpy_pbmc_quickstart.html)
+- API: [TaskRunner](https://uddamvathanak.github.io/scDLKit/api/taskrunner.html)
+
 ## Fine-Tuning Quickstart
 
 If your main goal is cell-type annotation on a labeled human `AnnData`, the experimental scGPT wrapper path is now also a first-class quickstart:
 
 ```python
-from scdlkit.foundation import adapt_scgpt_annotation
+from scdlkit import adapt_annotation
 
-runner = adapt_scgpt_annotation(
+runner = adapt_annotation(
     adata,
     label_key="cell_type",
     output_dir="artifacts/scgpt_annotation",
@@ -98,7 +109,13 @@ This fine-tuning path is still experimental and intentionally narrow:
 - human scRNA-seq only
 - official scGPT `whole-human` checkpoint only
 - annotation only
-- frozen probe, head-only tuning, and LoRA only
+- default quickstart comparison is `frozen_probe` plus `head`
+- LoRA remains opt-in through `strategies=("frozen_probe", "head", "lora")`
+
+Related docs:
+
+- Tutorial: [Experimental scGPT dataset-specific annotation](https://uddamvathanak.github.io/scDLKit/_tutorials/scgpt_dataset_specific_annotation.html)
+- API: [Experimental annotation quickstart API](https://uddamvathanak.github.io/scDLKit/api/annotation.html)
 
 ## Start Here
 
@@ -116,6 +133,7 @@ This fine-tuning path is still experimental and intentionally narrow:
 - Experimental foundation notebook: `examples/scgpt_pbmc_embeddings.ipynb`
 - Experimental annotation fine-tuning notebook: `examples/scgpt_cell_type_annotation.ipynb`
 - Experimental dataset-specific wrapper notebook: `examples/scgpt_dataset_specific_annotation.ipynb`
+- API routing page: `docs/api/index.md`
 - Synthetic smoke examples: `examples/first_run_synthetic.ipynb`, `examples/first_run_synthetic.py`
 
 ## Why scDLKit
@@ -200,7 +218,7 @@ Additional Scanpy-first notebooks:
 - `examples/custom_model_extension.ipynb`: wrap a raw PyTorch autoencoder and train it through `Trainer`
 - `examples/scgpt_pbmc_embeddings.ipynb`: run the experimental frozen `whole-human` scGPT embedding workflow and return to Scanpy through `adata.obsm`
 - `examples/scgpt_cell_type_annotation.ipynb`: compare `PCA + logistic regression`, frozen scGPT, head-only tuning, and LoRA tuning for labeled PBMC annotation
-- `examples/scgpt_dataset_specific_annotation.ipynb`: use the new wrapper-first `adapt_scgpt_annotation(...)` flow on a second labeled PBMC dataset and save the best fitted runner
+- `examples/scgpt_dataset_specific_annotation.ipynb`: use the new wrapper-first `adapt_annotation(...)` flow on a second labeled PBMC dataset and save the best fitted runner
 
 The synthetic notebook and script are still available, but they are now the smoke-test path rather than the primary researcher onboarding flow:
 
@@ -270,9 +288,9 @@ from scdlkit.foundation import (
 Experimental wrapper-first adaptation:
 
 ```python
-from scdlkit.foundation import adapt_scgpt_annotation
+from scdlkit import adapt_annotation
 
-runner = adapt_scgpt_annotation(
+runner = adapt_annotation(
     adata,
     label_key="cell_type",
     output_dir="artifacts/scgpt_annotation",

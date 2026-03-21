@@ -32,6 +32,7 @@ from scdlkit.training import Trainer
 from scdlkit.visualization.classification import plot_confusion_matrix
 
 _ALLOWED_STRATEGIES = ("frozen_probe", "head", "lora")
+_DEFAULT_STRATEGIES = ("frozen_probe", "head")
 _HEAD_EPOCHS = 3
 _LORA_EPOCHS = 2
 
@@ -197,14 +198,49 @@ def _save_scanpy_umap(
 
 
 class ScGPTAnnotationRunner:
-    """High-level experimental wrapper for scGPT annotation adaptation."""
+    """High-level experimental wrapper for scGPT annotation adaptation.
+
+    Parameters
+    ----------
+    label_key
+        Required target label column in ``adata.obs``.
+    checkpoint
+        Experimental checkpoint identifier. The public path currently supports
+        only scGPT ``whole-human``.
+    strategies
+        Strategy ladder to compare. The default keeps the beginner path on
+        ``("frozen_probe", "head")``.
+    batch_size
+        Wrapper batch size for preparation, inference, and training.
+    val_size
+        Validation split fraction.
+    test_size
+        Test split fraction.
+    random_state
+        Random seed used for splitting and trainable strategies.
+    device
+        ``"auto"``, ``"cpu"``, or ``"cuda"``.
+    classifier_dropout
+        Dropout applied in the annotation classifier head.
+    lora_config
+        Optional LoRA configuration used when the strategy ladder includes
+        ``"lora"``.
+    output_dir
+        Optional artifact directory for reports, plots, and saved state.
+
+    Notes
+    -----
+    The default strategy ladder is ``("frozen_probe", "head")`` so the
+    beginner path stays CPU-friendly. LoRA remains available through an
+    explicit ``strategies=(...)`` override.
+    """
 
     def __init__(
         self,
         *,
         label_key: str,
         checkpoint: str = DEFAULT_SCGPT_CHECKPOINT,
-        strategies: tuple[str, ...] = ("frozen_probe", "head", "lora"),
+        strategies: tuple[str, ...] = _DEFAULT_STRATEGIES,
         batch_size: int = 64,
         val_size: float = 0.15,
         test_size: float = 0.15,
@@ -242,7 +278,19 @@ class ScGPTAnnotationRunner:
         self._cache_dir: Path | None = None
 
     def inspect(self, adata: AnnData) -> ScGPTAnnotationDataReport:
-        """Inspect dataset compatibility before fitting."""
+        """Inspect dataset compatibility before fitting.
+
+        Parameters
+        ----------
+        adata
+            Labeled human single-cell ``AnnData`` to inspect.
+
+        Returns
+        -------
+        ScGPTAnnotationDataReport
+            Compatibility report with overlap, class-balance, and split
+            warnings.
+        """
 
         report = inspect_scgpt_annotation_data(
             adata,
@@ -538,7 +586,24 @@ class ScGPTAnnotationRunner:
         )
 
     def fit_compare(self, adata: AnnData) -> ScGPTAnnotationRunSummary:
-        """Inspect, compare strategies, and keep the best fitted strategy."""
+        """Inspect, compare strategies, and keep the best fitted strategy.
+
+        Parameters
+        ----------
+        adata
+            Labeled human single-cell ``AnnData`` to adapt on.
+
+        Returns
+        -------
+        ScGPTAnnotationRunSummary
+            Summary with the strategy metrics table, best strategy, output
+            directory, and checkpoint path when saved later.
+
+        Raises
+        ------
+        ValueError
+            If the dataset does not expose at least two label categories.
+        """
 
         report = self.inspect(adata)
         if len(report.label_categories) < 2:
@@ -583,7 +648,24 @@ class ScGPTAnnotationRunner:
         return self.summary_
 
     def predict(self, adata: AnnData) -> dict[str, np.ndarray]:
-        """Predict labels, probabilities, and embeddings with the best strategy."""
+        """Predict labels, probabilities, and embeddings with the best strategy.
+
+        Parameters
+        ----------
+        adata
+            ``AnnData`` to annotate with the fitted or loaded runner.
+
+        Returns
+        -------
+        dict[str, numpy.ndarray]
+            Prediction payload containing ``label_codes``, ``labels``,
+            ``probabilities``, and ``latent``.
+
+        Raises
+        ------
+        RuntimeError
+            If the runner has not been fitted or loaded yet.
+        """
 
         if (
             self.best_strategy_ is None
@@ -638,7 +720,25 @@ class ScGPTAnnotationRunner:
         embedding_key: str = "X_scgpt_best",
         inplace: bool = True,
     ) -> AnnData | None:
-        """Write predicted labels and latent embeddings back into ``AnnData``."""
+        """Write predicted labels and latent embeddings back into ``AnnData``.
+
+        Parameters
+        ----------
+        adata
+            Target ``AnnData`` to annotate.
+        obs_key
+            Base observation key for predicted labels.
+        embedding_key
+            ``adata.obsm`` key for the best-strategy latent embedding.
+        inplace
+            When ``True``, write directly into ``adata`` and return ``None``.
+
+        Returns
+        -------
+        AnnData | None
+            ``None`` for in-place writes, otherwise a copied annotated
+            ``AnnData``.
+        """
 
         target = adata if inplace else adata.copy()
         predictions = self.predict(target)
@@ -654,7 +754,23 @@ class ScGPTAnnotationRunner:
         return target
 
     def save(self, path: str | Path) -> Path:
-        """Persist the best fitted wrapper state."""
+        """Persist the best fitted wrapper state.
+
+        Parameters
+        ----------
+        path
+            Output directory for ``manifest.json`` and ``model_state.pt``.
+
+        Returns
+        -------
+        pathlib.Path
+            Directory containing the saved runner state.
+
+        Raises
+        ------
+        RuntimeError
+            If no fitted or loaded best strategy is available.
+        """
 
         if (
             self.best_strategy_ is None
@@ -741,7 +857,27 @@ class ScGPTAnnotationRunner:
         device: str = "auto",
         cache_dir: str | Path | None = None,
     ) -> ScGPTAnnotationRunner:
-        """Load a saved experimental scGPT annotation runner."""
+        """Load a saved experimental scGPT annotation runner.
+
+        Parameters
+        ----------
+        path
+            Directory containing ``manifest.json`` and ``model_state.pt``.
+        device
+            ``"auto"``, ``"cpu"``, or ``"cuda"`` for the reloaded model.
+        cache_dir
+            Optional checkpoint cache root for the base scGPT checkpoint.
+
+        Returns
+        -------
+        ScGPTAnnotationRunner
+            Reloaded runner with the saved best strategy restored.
+
+        Raises
+        ------
+        ValueError
+            If the saved runner payload is incomplete or malformed.
+        """
 
         path_obj = Path(path)
         manifest_path = path_obj / "manifest.json"
@@ -763,7 +899,7 @@ class ScGPTAnnotationRunner:
             label_key=str(manifest["label_key"]),
             checkpoint=str(manifest.get("checkpoint_id", DEFAULT_SCGPT_CHECKPOINT)),
             strategies=tuple(
-                str(value) for value in manifest.get("strategies", _ALLOWED_STRATEGIES)
+                str(value) for value in manifest.get("strategies", _DEFAULT_STRATEGIES)
             ),
             batch_size=int(manifest.get("batch_size", 64)),
             val_size=float(manifest.get("val_size", 0.15)),
@@ -836,7 +972,7 @@ def adapt_scgpt_annotation(
     *,
     label_key: str,
     checkpoint: str = DEFAULT_SCGPT_CHECKPOINT,
-    strategies: tuple[str, ...] = ("frozen_probe", "head", "lora"),
+    strategies: tuple[str, ...] = _DEFAULT_STRATEGIES,
     batch_size: int = 64,
     val_size: float = 0.15,
     test_size: float = 0.15,
@@ -844,7 +980,42 @@ def adapt_scgpt_annotation(
     device: str = "auto",
     output_dir: str | Path | None = None,
 ) -> ScGPTAnnotationRunner:
-    """Run the experimental wrapper-first scGPT annotation workflow in one call."""
+    """Run the experimental wrapper-first scGPT annotation workflow in one call.
+
+    Parameters
+    ----------
+    adata
+        Labeled human single-cell ``AnnData`` to adapt on.
+    label_key
+        Required label column in ``adata.obs``.
+    checkpoint
+        Experimental checkpoint identifier. The public route currently supports
+        only scGPT ``whole-human``.
+    strategies
+        Strategy ladder to compare. Defaults to ``("frozen_probe", "head")``.
+    batch_size
+        Wrapper batch size for preparation, inference, and training.
+    val_size
+        Validation split fraction.
+    test_size
+        Test split fraction.
+    random_state
+        Random seed used for splitting and trainable strategies.
+    device
+        ``"auto"``, ``"cpu"``, or ``"cuda"``.
+    output_dir
+        Optional artifact directory for reports, plots, and saved state.
+
+    Returns
+    -------
+    ScGPTAnnotationRunner
+        Fitted experimental runner holding the best strategy.
+
+    Notes
+    -----
+    The default quickstart compares ``frozen_probe`` and ``head`` only. LoRA
+    remains available by passing it explicitly in ``strategies``.
+    """
 
     runner = ScGPTAnnotationRunner(
         label_key=label_key,
