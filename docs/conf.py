@@ -11,8 +11,8 @@ sys.path.insert(0, str(ROOT / "src"))
 from scdlkit import __version__  # noqa: E402
 
 project = "scDLKit"
-copyright = "2026, Vathanak Uddam"
-author = "Vathanak Uddam"
+copyright = "2026, Rom Uddamvathanak"
+author = "Rom Uddamvathanak"
 release = __version__
 version = __version__
 
@@ -64,6 +64,8 @@ intersphinx_mapping = {
 
 html_theme = "pydata_sphinx_theme"
 html_title = "scDLKit documentation"
+html_logo = "_static/scdlkit_logo.png"
+html_favicon = "_static/scdlkit_favicon.ico"
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
 html_theme_options = {

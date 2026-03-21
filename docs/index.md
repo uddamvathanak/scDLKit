@@ -167,24 +167,18 @@ See what Scanpy still owns, what scDLKit adds, and how the two tutorial ecosyste
 ```
 ````
 
-## Example outputs
+## Workflow snapshots
 
 ```{figure} _static/pbmc_vae_latent_umap.png
 :alt: Latent UMAP from the Scanpy PBMC quickstart
 
-Latent UMAP from the Scanpy PBMC quickstart. A healthy quickstart run should separate the major PBMC populations into broad regions rather than collapsing into a single mixed cloud.
-```
-
-```{figure} _static/pbmc_benchmark_comparison.png
-:alt: PBMC comparison plot from the benchmark tutorial
-
-Benchmark comparison chart from the PBMC model-comparison tutorial.
+Quickstart embedding colored by the PBMC reference labels.
 ```
 
 ```{figure} _static/pbmc_downstream_leiden_umap.png
 :alt: Leiden UMAP from the downstream Scanpy tutorial
 
-Leiden-clustered UMAP from the downstream Scanpy workflow. This is a more realistic view of how researchers inspect cell-type structure after the scDLKit embedding step.
+Leiden clustering on the same embedding after handing control back to Scanpy.
 ```
 
 ## Positioning

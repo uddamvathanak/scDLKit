@@ -10,7 +10,7 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
 authors = [
-  { name = "Vathanak Uddam" },
+  { name = "Rom Uddamvathanak" },
 ]
 keywords = ["single-cell", "anndata", "bioinformatics", "deep-learning", "pytorch", "scRNA-seq"]
 classifiers = [

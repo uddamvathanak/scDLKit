@@ -3,8 +3,8 @@ title: scDLKit
 message: "If you use scDLKit, please cite the software entry below."
 type: software
 authors:
-  - family-names: Uddam
-    given-names: Vathanak
+  - family-names: Uddamvathanak
+    given-names: Rom
 repository-code: "https://github.com/uddamvathanak/scDLKit"
 license: MIT
 version: 0.1.6
