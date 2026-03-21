@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
-import importlib.util
 import json
-import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -66,15 +64,9 @@ def parse_args() -> argparse.Namespace:
 
 
 def _load_tutorial_ids() -> set[str]:
-    module_path = ROOT / "scripts" / "execute_tutorial_suite.py"
-    spec = importlib.util.spec_from_file_location("execute_tutorial_suite", module_path)
-    if spec is None or spec.loader is None:
-        msg = f"Unable to load tutorial specs from {module_path}."
-        raise RuntimeError(msg)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return {str(tutorial.name) for tutorial in module.TUTORIAL_SPECS}
+    from tutorial_catalog import TUTORIAL_IDS
+
+    return set(TUTORIAL_IDS)
 
 
 def _load_registry(path: Path) -> list[FeatureContract]:
