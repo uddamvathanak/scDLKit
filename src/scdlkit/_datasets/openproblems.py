@@ -33,6 +33,9 @@ _PROFILE_CONFIG: dict[str, dict[str, int]] = {
 }
 _TOP_CELL_TYPES = 8
 _MIN_GENE_OVERLAP = 500
+_LABEL_KEY_ALIASES = ("cell_type", "celltype")
+_BATCH_KEY_ALIASES = ("batch", "tech")
+_FEATURE_NAME_ALIASES = ("feature_name", "gene_symbol", "symbol")
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,6 +181,101 @@ def _validate_required_fields(adata: AnnData, spec: OpenProblemsDatasetSpec) -> 
         raise ValueError(msg)
 
 
+def _resolve_obs_key(
+    obs: pd.DataFrame,
+    *,
+    preferred: str,
+    aliases: tuple[str, ...],
+) -> str | None:
+    for candidate in (preferred, *aliases):
+        if candidate in obs.columns:
+            return candidate
+    return None
+
+
+def _resolve_feature_names(adata: AnnData) -> pd.Index | None:
+    for candidate in _FEATURE_NAME_ALIASES:
+        if candidate in adata.var.columns:
+            values = adata.var[candidate].astype(str)
+            if not values.empty:
+                return pd.Index(values, dtype="object")
+    if adata.var_names.size:
+        return pd.Index(adata.var_names.astype(str), dtype="object")
+    return None
+
+
+def _validate_download_schema(adata: AnnData, spec: OpenProblemsDatasetSpec) -> None:
+    missing: list[str] = []
+    label_source = _resolve_obs_key(
+        adata.obs,
+        preferred=spec.label_key,
+        aliases=_LABEL_KEY_ALIASES,
+    )
+    if label_source is None:
+        missing.append("obs['cell_type'] or obs['celltype']")
+    if spec.batch_key is not None:
+        batch_source = _resolve_obs_key(
+            adata.obs,
+            preferred=spec.batch_key,
+            aliases=_BATCH_KEY_ALIASES,
+        )
+        if batch_source is None:
+            missing.append("obs['batch'] or obs['tech']")
+    if "counts" not in adata.layers:
+        missing.append("layers['counts']")
+    if _resolve_feature_names(adata) is None:
+        missing.append("var['feature_name'] or var_names")
+    if missing:
+        msg = (
+            "OpenProblems pancreas dataset is missing required fields after schema "
+            "normalization: "
+            + ", ".join(missing)
+            + "."
+        )
+        raise ValueError(msg)
+    observed = _observed_organism(adata)
+    if observed is not None and observed != spec.organism:
+        msg = (
+            f"OpenProblems dataset organism '{observed}' does not match the expected "
+            f"'{spec.organism}'."
+        )
+        raise ValueError(msg)
+
+
+def _normalize_downloaded_adata(adata: AnnData, spec: OpenProblemsDatasetSpec) -> AnnData:
+    _validate_download_schema(adata, spec)
+    label_source = _resolve_obs_key(
+        adata.obs,
+        preferred=spec.label_key,
+        aliases=_LABEL_KEY_ALIASES,
+    )
+    batch_source = (
+        _resolve_obs_key(
+            adata.obs,
+            preferred=spec.batch_key,
+            aliases=_BATCH_KEY_ALIASES,
+        )
+        if spec.batch_key is not None
+        else None
+    )
+    feature_names = _resolve_feature_names(adata)
+    if label_source is None or feature_names is None:
+        msg = "OpenProblems pancreas dataset schema normalization did not resolve required fields."
+        raise ValueError(msg)
+
+    if label_source != spec.label_key:
+        adata.obs[spec.label_key] = adata.obs[label_source].astype(str)
+    if spec.batch_key is not None and batch_source is not None and batch_source != spec.batch_key:
+        adata.obs[spec.batch_key] = adata.obs[batch_source].astype(str)
+    if "feature_name" not in adata.var.columns:
+        adata.var["feature_name"] = feature_names.to_numpy(dtype=object)
+    if "feature_id" not in adata.var.columns:
+        adata.var["feature_id"] = pd.Index(adata.var_names.astype(str), dtype="object").to_numpy(
+            dtype=object
+        )
+    return adata
+
+
 def _ensure_nonnegative_counts(counts: sparse.spmatrix | np.ndarray) -> None:
     if sparse.issparse(counts):
         sparse_counts = cast(sparse.spmatrix, counts)
@@ -294,7 +392,7 @@ def _build_processed_subset(
     cache_dir: str | Path | None,
 ) -> tuple[AnnData, dict[str, object]]:
     profile_config = _PROFILE_CONFIG[profile]
-    raw_adata = read_h5ad(raw_path)
+    raw_adata = _normalize_downloaded_adata(read_h5ad(raw_path), spec)
     _validate_required_fields(raw_adata, spec)
 
     top_cell_types = _top_cell_types(raw_adata.obs, spec.label_key, top_k=_TOP_CELL_TYPES)
@@ -372,7 +470,7 @@ def ensure_openproblems_dataset(
 
     try:
         downloaded = read_h5ad(raw_path)
-        _validate_required_fields(downloaded, spec)
+        _validate_download_schema(downloaded, spec)
         _ensure_nonnegative_counts(downloaded.layers["counts"])
     except Exception:
         raw_path.unlink(missing_ok=True)

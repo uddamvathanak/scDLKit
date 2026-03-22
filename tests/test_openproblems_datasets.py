@@ -99,6 +99,15 @@ def _make_raw_pancreas_adata() -> AnnData:
     return adata
 
 
+def _make_live_schema_pancreas_adata() -> AnnData:
+    adata = _make_raw_pancreas_adata().copy()
+    obs = adata.obs.rename(columns={"cell_type": "celltype", "batch": "tech"})
+    var = pd.DataFrame(index=pd.Index(adata.var["feature_name"].astype(str), name="_index"))
+    live = AnnData(X=adata.X.copy(), obs=obs, var=var)
+    live.layers["counts"] = np.asarray(adata.layers["counts"]).copy()
+    return live
+
+
 @pytest.fixture
 def raw_pancreas_path(tmp_path: Path) -> Path:
     path = tmp_path / "openproblems_pancreas_fixture.h5ad"
@@ -170,6 +179,29 @@ def test_ensure_openproblems_dataset_raises_for_missing_required_fields(
         )
 
 
+def test_ensure_openproblems_dataset_accepts_live_openproblems_aliases(
+    tmp_path: Path,
+    openproblems_cache_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    live_schema = _make_live_schema_pancreas_adata()
+    live_path = tmp_path / "live_schema_pancreas.h5ad"
+    live_schema.write_h5ad(live_path)
+    monkeypatch.setattr(
+        openproblems,
+        "_download_file",
+        lambda url, destination: shutil.copyfile(live_path, destination),
+    )
+
+    raw_path = openproblems.ensure_openproblems_dataset(
+        "openproblems_v1/pancreas",
+        cache_dir=openproblems_cache_dir,
+        force_download=True,
+    )
+
+    assert raw_path.exists()
+
+
 def test_processed_pancreas_subset_uses_counts_and_unique_feature_names(
     raw_pancreas_path: Path,
     openproblems_cache_dir: Path,
@@ -193,6 +225,40 @@ def test_processed_pancreas_subset_uses_counts_and_unique_feature_names(
     assert np.min(np.asarray(adata.X)) >= 0
     assert adata.var_names.is_unique
     assert "feature_id" in adata.var
+
+
+def test_processed_pancreas_subset_canonicalizes_live_openproblems_aliases(
+    tmp_path: Path,
+    openproblems_cache_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    live_schema = _make_live_schema_pancreas_adata()
+    live_path = tmp_path / "live_schema_pancreas.h5ad"
+    live_schema.write_h5ad(live_path)
+    monkeypatch.setattr(
+        openproblems,
+        "_download_file",
+        lambda url, destination: shutil.copyfile(live_path, destination),
+    )
+
+    adata = openproblems.load_openproblems_pancreas_annotation_dataset(
+        profile="quickstart",
+        cache_dir=openproblems_cache_dir,
+        force_download=True,
+        force_rebuild=True,
+    )
+
+    assert "cell_type" in adata.obs
+    assert "batch" in adata.obs
+    assert "feature_id" in adata.var
+    np.testing.assert_array_equal(
+        adata.obs["cell_type"].astype(str).to_numpy(),
+        adata.obs["celltype"].astype(str).to_numpy(),
+    )
+    np.testing.assert_array_equal(
+        adata.obs["batch"].astype(str).to_numpy(),
+        adata.obs["tech"].astype(str).to_numpy(),
+    )
 
 
 def test_processed_pancreas_subset_builds_deterministically(
