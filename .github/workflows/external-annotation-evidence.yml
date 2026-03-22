@@ -1,0 +1,46 @@
+name: external-annotation-evidence
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 2 * * 1"
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  SCDLKIT_CACHE_DIR: ${{ github.workspace }}/.cache/scdlkit
+
+jobs:
+  external-annotation-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Restore foundation and dataset cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.SCDLKIT_CACHE_DIR }}
+          key: scgpt-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+      - name: Install package and evidence dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[foundation,tutorials,docs]
+      - name: Run external annotation evidence script
+        run: python scripts/run_external_annotation_evidence.py
+      - name: Prepare pancreas tutorial notebook
+        run: |
+          python scripts/prepare_tutorial_notebooks.py \
+            --execute published \
+            --only scgpt_human_pancreas_annotation.ipynb \
+            --skip-assets
+      - name: Upload external annotation evidence artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: external-annotation-evidence
+          path: |
+            artifacts/external_annotation_evidence
+            docs/_tutorials/scgpt_human_pancreas_annotation.ipynb

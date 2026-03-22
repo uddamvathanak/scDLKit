@@ -79,6 +79,7 @@ runner.save("artifacts/scgpt_annotation/best_model")
 ## Related tutorial(s)
 
 - [Experimental scGPT dataset-specific annotation](/_tutorials/scgpt_dataset_specific_annotation)
+- [Experimental scGPT human-pancreas annotation](/_tutorials/scgpt_human_pancreas_annotation)
 - [Experimental scGPT cell-type annotation](/_tutorials/scgpt_cell_type_annotation)
 
 ```{eval-rst}

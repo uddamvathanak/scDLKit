@@ -46,6 +46,14 @@ def get_cache_root(cache_dir: str | Path | None = None) -> Path:
     return root
 
 
+def get_dataset_cache_root(cache_dir: str | Path | None = None) -> Path:
+    """Resolve the cache root for downloaded benchmark datasets."""
+
+    root = get_cache_root(cache_dir) / "datasets"
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
 def get_scgpt_checkpoint_dir(
     checkpoint: str = DEFAULT_SCGPT_CHECKPOINT,
     *,

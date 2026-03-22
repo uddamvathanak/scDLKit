@@ -154,6 +154,12 @@ PROFILE_DEFAULTS: dict[str, dict[str, dict[str, dict[str, tuple[int, ...]]]]] = 
                 "scgpt_head": (42,),
                 "scgpt_lora": (42,),
             },
+            "openproblems_human_pancreas": {
+                "pca_logistic_annotation": (42,),
+                "scgpt_frozen_probe": (42,),
+                "scgpt_head": (42,),
+                "scgpt_lora": (42,),
+            },
         },
     },
 }
@@ -182,6 +188,11 @@ class DatasetSpec:
 DATASET_SPECS: dict[str, DatasetSpec] = {
     "pbmc3k_processed": DatasetSpec(name="pbmc3k_processed", label_key="louvain"),
     "pbmc68k_reduced": DatasetSpec(name="pbmc68k_reduced", label_key="bulk_labels"),
+    "openproblems_human_pancreas": DatasetSpec(
+        name="openproblems_human_pancreas",
+        label_key="cell_type",
+        batch_key="batch",
+    ),
     "paul15": DatasetSpec(name="paul15", label_key="paul15_clusters"),
     "moignard15": DatasetSpec(name="moignard15", label_key="exp_groups"),
 }
@@ -245,7 +256,7 @@ def _default_output_dir(profile: str) -> Path:
     return ROOT / "artifacts" / "quality" / f"{_utc_timestamp()}-{profile}"
 
 
-def _load_dataset(name: str) -> tuple[AnnData, DatasetSpec]:
+def _load_dataset(name: str, *, profile: str = "full") -> tuple[AnnData, DatasetSpec]:
     import scanpy as sc
 
     if name == "pbmc3k_processed":
@@ -253,6 +264,12 @@ def _load_dataset(name: str) -> tuple[AnnData, DatasetSpec]:
         adata = sc.read_h5ad(data_path) if data_path.exists() else sc.datasets.pbmc3k_processed()
     elif name == "pbmc68k_reduced":
         adata = sc.datasets.pbmc68k_reduced()
+    elif name == "openproblems_human_pancreas":
+        from scdlkit._datasets.openproblems import (
+            load_openproblems_pancreas_annotation_dataset,
+        )
+
+        adata = load_openproblems_pancreas_annotation_dataset(profile=profile)
     elif name == "paul15":
         adata = sc.datasets.paul15()
     elif name == "moignard15":
@@ -467,6 +484,71 @@ def _save_confusion_plot(
 def _count_trainable_parameters(model: Any) -> int:
     return int(
         sum(parameter.numel() for parameter in model.parameters() if parameter.requires_grad)
+    )
+
+
+def _batch_metrics_frame(
+    *,
+    obs: pd.DataFrame,
+    batch_key: str | None,
+    y_true: np.ndarray,
+    logits: np.ndarray,
+) -> pd.DataFrame:
+    from scdlkit.evaluation.metrics import classification_metrics
+
+    columns = ["batch", "n_cells", "accuracy", "macro_f1"]
+    if batch_key is None or batch_key not in obs:
+        return pd.DataFrame(columns=columns)
+
+    rows: list[dict[str, Any]] = []
+    batches = obs[batch_key].astype(str).to_numpy()
+    for batch_value in sorted(pd.unique(batches)):
+        mask = batches == batch_value
+        if int(mask.sum()) == 0:
+            continue
+        metrics = classification_metrics(y_true[mask], logits[mask])
+        rows.append(
+            {
+                "batch": batch_value,
+                "n_cells": int(mask.sum()),
+                "accuracy": float(metrics["accuracy"]),
+                "macro_f1": float(metrics["macro_f1"]),
+            }
+        )
+    return pd.DataFrame.from_records(rows, columns=columns)
+
+
+def _batch_metric_summary(batch_metrics: pd.DataFrame) -> dict[str, float]:
+    if batch_metrics.empty:
+        return {}
+    return {
+        "batch_accuracy_mean": float(batch_metrics["accuracy"].mean()),
+        "batch_accuracy_min": float(batch_metrics["accuracy"].min()),
+        "batch_macro_f1_mean": float(batch_metrics["macro_f1"].mean()),
+        "batch_macro_f1_min": float(batch_metrics["macro_f1"].min()),
+    }
+
+
+def _prepare_annotation_benchmark_adata(
+    dataset_name: str,
+    adata: AnnData,
+    *,
+    label_key: str,
+    seed: int,
+    profile: str,
+) -> AnnData:
+    if dataset_name == "openproblems_human_pancreas":
+        return adata.copy()
+    profile_config = _foundation_annotation_profile(profile)
+    annotation_adata = _subset_adata_for_foundation(
+        adata,
+        label_key=label_key,
+        seed=seed,
+        max_cells=profile_config["max_cells"],
+    )
+    return _subset_foundation_genes(
+        annotation_adata,
+        max_genes=profile_config["max_genes"],
     )
 
 
@@ -881,6 +963,7 @@ def run_foundation_annotation_pca_logistic(
     dataset_name: str,
     adata: AnnData,
     label_key: str,
+    batch_key: str | None,
     seed: int,
     output_root: Path,
     profile: str,
@@ -896,16 +979,12 @@ def run_foundation_annotation_pca_logistic(
         / f"seed_{seed}"
     )
     output_dir.mkdir(parents=True, exist_ok=True)
-    profile_config = _foundation_annotation_profile(profile)
-    annotation_adata = _subset_adata_for_foundation(
+    annotation_adata = _prepare_annotation_benchmark_adata(
+        dataset_name,
         adata,
         label_key=label_key,
         seed=seed,
-        max_cells=profile_config["max_cells"],
-    )
-    annotation_adata = _subset_foundation_genes(
-        annotation_adata,
-        max_genes=profile_config["max_genes"],
+        profile=profile,
     )
     prepared = prepare_data(annotation_adata, label_key=label_key, random_state=seed)
     train_split = prepared.train
@@ -939,6 +1018,13 @@ def run_foundation_annotation_pca_logistic(
 
     obs_names = test_split.obs_names
     test_adata = annotation_adata[obs_names].copy() if obs_names else annotation_adata.copy()
+    batch_metrics = _batch_metrics_frame(
+        obs=test_adata.obs,
+        batch_key=batch_key,
+        y_true=np.asarray(test_split.labels, dtype=int),
+        logits=np.asarray(logits, dtype=np.float32),
+    )
+    batch_metrics.to_csv(output_dir / "batch_metrics.csv", index=False)
     _save_scanpy_umap(test_adata, test_latent, label_key, output_dir / "latent_umap.png", seed=seed)
 
     report_metrics = {
@@ -956,7 +1042,9 @@ def run_foundation_annotation_pca_logistic(
         [
             {
                 **metrics,
+                **_batch_metric_summary(batch_metrics),
                 "trainable_parameters": 0,
+                "batch_metrics_artifact": str(output_dir / "batch_metrics.csv"),
                 "confusion_matrix_artifact": str(output_dir / "confusion_matrix.png"),
                 "latent_umap_artifact": str(output_dir / "latent_umap.png"),
             }
@@ -972,7 +1060,11 @@ def run_foundation_annotation_pca_logistic(
         "peak_memory_mb": _process_peak_memory_mb(),
         "artifact_dir": str(output_dir),
         "trainable_parameters": 0,
+        "batch_metrics_artifact": str(output_dir / "batch_metrics.csv"),
+        "confusion_matrix_artifact": str(output_dir / "confusion_matrix.png"),
+        "latent_umap_artifact": str(output_dir / "latent_umap.png"),
         **_scalar_metrics(metrics),
+        **_batch_metric_summary(batch_metrics),
     }
 
 
@@ -981,6 +1073,7 @@ def run_scgpt_annotation_strategy(
     dataset_name: str,
     adata: AnnData,
     label_key: str,
+    batch_key: str | None,
     seed: int,
     output_root: Path,
     model_name: str,
@@ -1000,15 +1093,12 @@ def run_scgpt_annotation_strategy(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     profile_config = _foundation_annotation_profile(profile)
-    annotation_adata = _subset_adata_for_foundation(
+    annotation_adata = _prepare_annotation_benchmark_adata(
+        dataset_name,
         adata,
         label_key=label_key,
         seed=seed,
-        max_cells=profile_config["max_cells"],
-    )
-    annotation_adata = _subset_foundation_genes(
-        annotation_adata,
-        max_genes=profile_config["max_genes"],
+        profile=profile,
     )
     prepared = prepare_scgpt_data(
         annotation_adata,
@@ -1091,6 +1181,13 @@ def run_scgpt_annotation_strategy(
     confusion = metrics.get("confusion_matrix")
     if isinstance(confusion, list):
         _save_confusion_plot(confusion, label_categories, output_dir)
+    batch_metrics = _batch_metrics_frame(
+        obs=test_adata.obs,
+        batch_key=batch_key,
+        y_true=np.asarray(predictions["y"], dtype=int),
+        logits=np.asarray(predictions["logits"], dtype=np.float32),
+    )
+    batch_metrics.to_csv(output_dir / "batch_metrics.csv", index=False)
     _save_scanpy_umap(
         test_adata,
         np.asarray(predictions["latent"], dtype="float32"),
@@ -1114,7 +1211,9 @@ def run_scgpt_annotation_strategy(
         [
             {
                 **metrics,
+                **_batch_metric_summary(batch_metrics),
                 "trainable_parameters": trainable_parameters,
+                "batch_metrics_artifact": str(output_dir / "batch_metrics.csv"),
                 "confusion_matrix_artifact": str(output_dir / "confusion_matrix.png"),
                 "latent_umap_artifact": str(output_dir / "latent_umap.png"),
             }
@@ -1131,7 +1230,11 @@ def run_scgpt_annotation_strategy(
         "peak_memory_mb": _process_peak_memory_mb(),
         "artifact_dir": str(output_dir),
         "trainable_parameters": trainable_parameters,
+        "batch_metrics_artifact": str(output_dir / "batch_metrics.csv"),
+        "confusion_matrix_artifact": str(output_dir / "confusion_matrix.png"),
+        "latent_umap_artifact": str(output_dir / "latent_umap.png"),
         **_scalar_metrics(metrics),
+        **_batch_metric_summary(batch_metrics),
     }
 
 
@@ -1158,7 +1261,13 @@ def _required_benchmark_artifacts(task: str, model: str) -> tuple[str, ...]:
     if task == "foundation":
         return ("report.md", "report.csv", "latent_umap.png")
     if task == "foundation_annotation":
-        return ("report.md", "report.csv", "confusion_matrix.png", "latent_umap.png")
+        return (
+            "report.md",
+            "report.csv",
+            "batch_metrics.csv",
+            "confusion_matrix.png",
+            "latent_umap.png",
+        )
     if task == "representation" and model in {"pca", "scgpt_whole_human"}:
         return ("report.md", "report.csv", "latent_umap.png")
     if task == "representation":
@@ -1404,6 +1513,31 @@ def evaluate_quality_gates(metrics_frame: pd.DataFrame, *, profile: str) -> list
             f"of {QUALITY_GATES['scgpt_annotation_tuned_macro_f1_min']:.2f} "
             f"(best {best_macro_f1:.3f})."
         )
+
+    pancreas_rows = metrics_frame[
+        (metrics_frame["dataset"] == "openproblems_human_pancreas")
+        & (metrics_frame["task"] == "foundation_annotation")
+    ]
+    if not pancreas_rows.empty:
+        tuned_rows = pancreas_rows[
+            pancreas_rows["model"].isin(("scgpt_head", "scgpt_lora"))
+        ]
+        if tuned_rows.empty:
+            issues.append(
+                "OpenProblems human pancreas annotation benchmark is missing tuned strategies."
+            )
+        else:
+            best_pancreas_macro_f1 = float(pancreas_rows["macro_f1"].max())
+            best_tuned_macro_f1 = float(tuned_rows["macro_f1"].max())
+            if best_tuned_macro_f1 < best_pancreas_macro_f1 - 0.03:
+                issues.append(
+                    "No tuned scGPT strategy stayed within 0.03 macro F1 of the best "
+                    "OpenProblems human pancreas annotation result "
+                    + (
+                        f"(best overall {best_pancreas_macro_f1:.3f}, "
+                        f"best tuned {best_tuned_macro_f1:.3f})."
+                    )
+                )
     return issues
 
 
@@ -1744,6 +1878,7 @@ def render_summary_markdown(summary: dict[str, Any]) -> str:
             "",
             "- `pbmc3k_processed` is the primary release-quality representation benchmark.",
             "- `pbmc68k_reduced` is the experimental foundation-model comparison benchmark.",
+            "- `openproblems_human_pancreas` is the external human annotation evidence benchmark.",
             "- `foundation_annotation` benchmarks compare frozen scGPT, head-only tuning, and "
             "LoRA tuning for cell-type annotation.",
             "- `paul15` is the secondary built-in benchmark for checking dataset sensitivity.",
@@ -1802,7 +1937,7 @@ def run_quality_suite(
     precomputed_annotation_metrics = foundation_annotation_metrics or {}
 
     for dataset_name, model_seeds in profile_config["representation"].items():
-        adata, spec = _load_dataset(dataset_name)
+        adata, spec = _load_dataset(dataset_name, profile=profile)
         for model_name, seeds in model_seeds.items():
             for seed in seeds:
                 if model_name == "pca":
@@ -1842,7 +1977,7 @@ def run_quality_suite(
                     )
 
     for dataset_name, model_seeds in profile_config["classification"].items():
-        adata, spec = _load_dataset(dataset_name)
+        adata, spec = _load_dataset(dataset_name, profile=profile)
         for model_name, seeds in model_seeds.items():
             for seed in seeds:
                 if model_name == "mlp_classifier":
@@ -1868,7 +2003,7 @@ def run_quality_suite(
                     )
 
     for dataset_name, model_seeds in profile_config.get("foundation", {}).items():
-        adata, spec = _load_dataset(dataset_name)
+        adata, spec = _load_dataset(dataset_name, profile=profile)
         for model_name, seeds in model_seeds.items():
             for seed in seeds:
                 if model_name == "pca_foundation":
@@ -1895,7 +2030,7 @@ def run_quality_suite(
                     )
 
     for dataset_name, model_seeds in profile_config.get("foundation_annotation", {}).items():
-        adata, spec = _load_dataset(dataset_name)
+        adata, spec = _load_dataset(dataset_name, profile=profile)
         for model_name, seeds in model_seeds.items():
             for seed in seeds:
                 if model_name == "pca_logistic_annotation":
@@ -1904,6 +2039,7 @@ def run_quality_suite(
                             dataset_name=dataset_name,
                             adata=adata,
                             label_key=spec.label_key,
+                            batch_key=spec.batch_key,
                             seed=seed,
                             output_root=output_dir,
                             profile=profile,
@@ -1919,6 +2055,7 @@ def run_quality_suite(
                                 dataset_name=dataset_name,
                                 adata=adata,
                                 label_key=spec.label_key,
+                                batch_key=spec.batch_key,
                                 seed=seed,
                                 output_root=output_dir,
                                 model_name=model_name,

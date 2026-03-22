@@ -115,7 +115,9 @@ This fine-tuning path is still experimental and intentionally narrow:
 Related docs:
 
 - Tutorial: [Experimental scGPT dataset-specific annotation](https://uddamvathanak.github.io/scDLKit/_tutorials/scgpt_dataset_specific_annotation.html)
+- Tutorial: [Experimental scGPT human-pancreas annotation](https://uddamvathanak.github.io/scDLKit/_tutorials/scgpt_human_pancreas_annotation.html)
 - API: [Experimental annotation quickstart API](https://uddamvathanak.github.io/scDLKit/api/annotation.html)
+- Guide: [Annotation benchmarks](https://uddamvathanak.github.io/scDLKit/guides/annotation-benchmarks.html)
 
 ## Start Here
 
@@ -126,6 +128,7 @@ Related docs:
 - CPU and GPU use the same notebook path through `device="auto"`
 - Core learning path: quickstart -> downstream Scanpy -> comparison -> reconstruction sanity check
 - Researcher shortcut for labeled data: quickstart -> experimental scGPT cell-type annotation -> experimental dataset-specific annotation
+- Beyond-PBMC annotation tutorial: `examples/scgpt_human_pancreas_annotation.ipynb`
 - Secondary notebooks: `examples/compare_models_pbmc.ipynb`, `examples/classification_demo.ipynb`
 - Downstream Scanpy notebook: `examples/downstream_scanpy_after_scdlkit.ipynb`
 - Reconstruction notebook: `examples/reconstruction_sanity_pbmc.ipynb`
@@ -219,6 +222,7 @@ Additional Scanpy-first notebooks:
 - `examples/scgpt_pbmc_embeddings.ipynb`: run the experimental frozen `whole-human` scGPT embedding workflow and return to Scanpy through `adata.obsm`
 - `examples/scgpt_cell_type_annotation.ipynb`: compare `PCA + logistic regression`, frozen scGPT, head-only tuning, and LoRA tuning for labeled PBMC annotation
 - `examples/scgpt_dataset_specific_annotation.ipynb`: use the new wrapper-first `adapt_annotation(...)` flow on a second labeled PBMC dataset and save the best fitted runner
+- `examples/scgpt_human_pancreas_annotation.ipynb`: run the same wrapper-first adaptation flow on a cached OpenProblems human-pancreas subset
 
 The synthetic notebook and script are still available, but they are now the smoke-test path rather than the primary researcher onboarding flow:
 

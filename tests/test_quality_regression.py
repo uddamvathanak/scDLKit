@@ -70,10 +70,14 @@ def _metrics_frame(
     scgpt_head_macro_f1: float = 0.84,
     scgpt_lora_accuracy: float = 0.87,
     scgpt_lora_macro_f1: float = 0.83,
+    pancreas_head_macro_f1: float = 0.74,
+    pancreas_lora_macro_f1: float = 0.76,
+    pancreas_best_macro_f1: float = 0.78,
     include_paul15: bool = True,
     include_transformer: bool = True,
     include_scgpt: bool = True,
     include_foundation_annotation: bool = True,
+    include_pancreas: bool = False,
 ) -> pd.DataFrame:
     rows = []
     rows.append(
@@ -225,6 +229,7 @@ def _metrics_frame(
                             (
                                 "report.md",
                                 "report.csv",
+                                "batch_metrics.csv",
                                 "confusion_matrix.png",
                                 "latent_umap.png",
                             ),
@@ -246,6 +251,7 @@ def _metrics_frame(
                             (
                                 "report.md",
                                 "report.csv",
+                                "batch_metrics.csv",
                                 "confusion_matrix.png",
                                 "latent_umap.png",
                             ),
@@ -267,6 +273,7 @@ def _metrics_frame(
                             (
                                 "report.md",
                                 "report.csv",
+                                "batch_metrics.csv",
                                 "confusion_matrix.png",
                                 "latent_umap.png",
                             ),
@@ -288,6 +295,7 @@ def _metrics_frame(
                             (
                                 "report.md",
                                 "report.csv",
+                                "batch_metrics.csv",
                                 "confusion_matrix.png",
                                 "latent_umap.png",
                             ),
@@ -296,6 +304,99 @@ def _metrics_frame(
                     "accuracy": scgpt_lora_accuracy,
                     "macro_f1": scgpt_lora_macro_f1,
                     "trainable_parameters": 731,
+                },
+            ]
+        )
+    if include_pancreas:
+        rows.extend(
+            [
+                {
+                    "dataset": "openproblems_human_pancreas",
+                    "task": "foundation_annotation",
+                    "model": "pca_logistic_annotation",
+                    "seed": 42,
+                    "runtime_sec": 1.2,
+                    "artifact_dir": str(
+                        _make_artifact_dir(
+                            tmp_path,
+                            (
+                                "report.md",
+                                "report.csv",
+                                "batch_metrics.csv",
+                                "confusion_matrix.png",
+                                "latent_umap.png",
+                            ),
+                        )
+                    ),
+                    "accuracy": 0.72,
+                    "macro_f1": pancreas_best_macro_f1,
+                    "trainable_parameters": 0,
+                },
+                {
+                    "dataset": "openproblems_human_pancreas",
+                    "task": "foundation_annotation",
+                    "model": "scgpt_frozen_probe",
+                    "seed": 42,
+                    "runtime_sec": 14.0,
+                    "artifact_dir": str(
+                        _make_artifact_dir(
+                            tmp_path,
+                            (
+                                "report.md",
+                                "report.csv",
+                                "batch_metrics.csv",
+                                "confusion_matrix.png",
+                                "latent_umap.png",
+                            ),
+                        )
+                    ),
+                    "accuracy": 0.70,
+                    "macro_f1": 0.73,
+                    "trainable_parameters": 0,
+                },
+                {
+                    "dataset": "openproblems_human_pancreas",
+                    "task": "foundation_annotation",
+                    "model": "scgpt_head",
+                    "seed": 42,
+                    "runtime_sec": 18.0,
+                    "artifact_dir": str(
+                        _make_artifact_dir(
+                            tmp_path,
+                            (
+                                "report.md",
+                                "report.csv",
+                                "batch_metrics.csv",
+                                "confusion_matrix.png",
+                                "latent_umap.png",
+                            ),
+                        )
+                    ),
+                    "accuracy": 0.73,
+                    "macro_f1": pancreas_head_macro_f1,
+                    "trainable_parameters": 220,
+                },
+                {
+                    "dataset": "openproblems_human_pancreas",
+                    "task": "foundation_annotation",
+                    "model": "scgpt_lora",
+                    "seed": 42,
+                    "runtime_sec": 26.0,
+                    "artifact_dir": str(
+                        _make_artifact_dir(
+                            tmp_path,
+                            (
+                                "report.md",
+                                "report.csv",
+                                "batch_metrics.csv",
+                                "confusion_matrix.png",
+                                "latent_umap.png",
+                            ),
+                        )
+                    ),
+                    "accuracy": 0.75,
+                    "macro_f1": pancreas_lora_macro_f1,
+                    "trainable_parameters": 760,
                 },
             ]
         )
@@ -479,3 +580,29 @@ def test_missing_foundation_annotation_run_blocks_release_readiness(tmp_path: Pa
     )
     assert summary["benchmark_ready"] is False
     assert any("scgpt_head" in missing for missing in summary["missing_runs"])
+
+
+def test_pancreas_gate_requires_a_tuned_strategy_close_to_the_best_result(tmp_path: Path) -> None:
+    passing_summary = quality_suite.build_summary(
+        _metrics_frame(tmp_path, include_pancreas=True),
+        profile="full",
+        tutorial_summary=_tutorial_summary(),
+    )
+    assert passing_summary["gates"]["passed"] is True
+
+    failing_summary = quality_suite.build_summary(
+        _metrics_frame(
+            tmp_path,
+            include_pancreas=True,
+            pancreas_head_macro_f1=0.70,
+            pancreas_lora_macro_f1=0.72,
+            pancreas_best_macro_f1=0.78,
+        ),
+        profile="full",
+        tutorial_summary=_tutorial_summary(),
+    )
+    assert failing_summary["gates"]["passed"] is False
+    assert any(
+        "OpenProblems human pancreas" in issue
+        for issue in failing_summary["gates"]["issues"]
+    )

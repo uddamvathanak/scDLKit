@@ -2,25 +2,26 @@
 
 ## Current phase
 
-scDLKit is now in a cautious experimental adaptation phase with a stronger wrapper-first story.
+scDLKit is now in a cautious experimental adaptation evidence phase.
 
-The immediate blocker before major new public features is documentation and ease-of-use hardening across the current public surface. A public feature is not considered complete unless it has:
+The documentation and ease-of-use hardening work from `0.1.6` remains a
+standing release gate, but the active product question is narrower:
 
-- at least one workflow tutorial
-- a real API contract page
-- parameter, return, and failure-mode expectations spelled out
+- can the current wrapper-first scGPT annotation workflow show useful evidence
+  beyond PBMC on another labeled human dataset?
 
-The narrow experimental scGPT bridge remains in scope, but it must satisfy the same documentation contract as the stable baseline path.
+The narrow experimental scGPT bridge remains in scope, but it still has to
+satisfy the same documentation contract as the stable baseline path.
 
 Current goals:
 
 - keep the quickstart-first landing pages and tutorial learning path stable
 - make tutorial coverage and API-reference completeness a standing release gate
-- unify beginner discovery around a top-level experimental annotation quickstart
-- expose fine-tuning and dataset adaptation earlier in the quickstart-facing docs for researchers with labeled data
+- keep the top-level experimental annotation quickstart easy to discover
+- keep fine-tuning and dataset adaptation visible earlier in the quickstart-facing docs for researchers with labeled data
 - preserve the hardened downstream Scanpy and reconstruction tutorials
 - keep the frozen scGPT bridge and annotation fine-tuning path experimental and inspectable
-- add easier wrapper-first adaptation workflows without weakening benchmark or tutorial quality gates
+- add beyond-PBMC evidence without weakening benchmark or tutorial quality gates
 - keep the project gene-expression-focused while the foundation path matures
 
 ## What scDLKit currently emphasizes
@@ -62,7 +63,7 @@ For researcher-facing onboarding, the public story should also answer these ques
 
 ## Next feature phase
 
-Target after this release: cautious continuation of experimental adaptation workflows
+Target after this release: beyond-PBMC evidence on OpenProblems human pancreas
 
 Planned direction:
 
@@ -70,6 +71,9 @@ Planned direction:
 - keep the built-in registry path for bundled baselines unchanged
 - keep scGPT fine-tuning experimental, narrow, and easy to inspect through tutorials, reports, and wrapper artifacts
 - keep the beginner annotation path low-code and CPU-practical by default
+- benchmark the wrapper-first annotation path on a cached human pancreas subset in addition to PBMC
+- compare `PCA + logistic regression`, frozen scGPT, head-only tuning, and LoRA without making universal superiority claims
+- add a heavier manual or scheduled workflow for external annotation evidence instead of pushing that cost into normal PR CI
 - evaluate broader adaptation strategies only after they are benchmarked against the current baselines and frozen foundation path
 - defer broad foundation abstractions until the scGPT adaptation path is stable
 
@@ -84,9 +88,10 @@ Near-term product and outreach work should stay close to the real researcher que
 
 ## Immediate next tasks
 
-- ship and stage the `0.1.6` release batch with the unified experimental annotation quickstart and docs contract checks
 - keep the default quickstart ladder on `frozen_probe` plus `head` unless runtime and usability data justify broadening it
-- benchmark the dataset-specific annotation workflow on at least one additional labeled human dataset beyond the current PBMC path
+- add deterministic download-and-cache support for OpenProblems human pancreas
+- publish a beyond-PBMC annotation tutorial on the cached pancreas quickstart subset
+- add a benchmark guide that compares PBMC and human pancreas outcomes without overclaiming
 - keep turning the most common researcher questions into short docs, comparison tables, reusable examples, and release-facing evidence
 
 ## Deferred work

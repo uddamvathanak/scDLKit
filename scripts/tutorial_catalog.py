@@ -20,6 +20,9 @@ NOTEBOOK_MAP = {
     "scgpt_dataset_specific_annotation.ipynb": (
         ROOT / "examples" / "scgpt_dataset_specific_annotation.ipynb"
     ),
+    "scgpt_human_pancreas_annotation.ipynb": (
+        ROOT / "examples" / "scgpt_human_pancreas_annotation.ipynb"
+    ),
     "synthetic_smoke.ipynb": ROOT / "examples" / "first_run_synthetic.ipynb",
 }
 
@@ -33,6 +36,7 @@ NOTEBOOK_GROUPS = {
     "scgpt_pbmc_embeddings.ipynb": "foundation",
     "scgpt_cell_type_annotation.ipynb": "foundation",
     "scgpt_dataset_specific_annotation.ipynb": "foundation",
+    "scgpt_human_pancreas_annotation.ipynb": "foundation",
     "synthetic_smoke.ipynb": "classic",
 }
 

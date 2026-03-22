@@ -77,6 +77,7 @@ Related docs:
 
 - [Experimental annotation quickstart API](./api/annotation.md)
 - [Experimental scGPT dataset-specific annotation](/_tutorials/scgpt_dataset_specific_annotation)
+- [Experimental scGPT human-pancreas annotation](/_tutorials/scgpt_human_pancreas_annotation)
 - [Experimental foundation helpers](./api/foundation.md)
 
 ## Learning path
@@ -92,13 +93,15 @@ Follow this order if you want the tutorial set to build up like a coherent workf
 7. [Experimental scGPT PBMC embeddings](/_tutorials/scgpt_pbmc_embeddings)
 8. [Experimental scGPT cell-type annotation](/_tutorials/scgpt_cell_type_annotation)
 9. [Experimental scGPT dataset-specific annotation](/_tutorials/scgpt_dataset_specific_annotation)
-10. [Synthetic smoke tutorial](/_tutorials/synthetic_smoke)
+10. [Experimental scGPT human-pancreas annotation](/_tutorials/scgpt_human_pancreas_annotation)
+11. [Synthetic smoke tutorial](/_tutorials/synthetic_smoke)
 
 If you already have labels and your main question is annotation adaptation, the shorter researcher path is:
 
 1. [Scanpy PBMC quickstart](/_tutorials/scanpy_pbmc_quickstart)
 2. [Experimental scGPT cell-type annotation](/_tutorials/scgpt_cell_type_annotation)
 3. [Experimental scGPT dataset-specific annotation](/_tutorials/scgpt_dataset_specific_annotation)
+4. [Experimental scGPT human-pancreas annotation](/_tutorials/scgpt_human_pancreas_annotation)
 
 ````{grid} 1 2 2 2
 :gutter: 3
@@ -159,6 +162,13 @@ Compare `PCA + logistic regression`, frozen scGPT, head-only tuning, and LoRA tu
 Use the new wrapper-first path to inspect a labeled dataset, compare strategies, annotate `AnnData`, and save the best fitted runner.
 ```
 
+```{grid-item-card} Beyond-PBMC evidence
+:link: _tutorials/scgpt_human_pancreas_annotation
+:link-type: doc
+
+See the same wrapper-first annotation path on a cached human pancreas subset so the experimental story is not limited to PBMC only.
+```
+
 ```{grid-item-card} Scanpy integration map
 :link: guides/scanpy-integration
 :link-type: doc
@@ -200,6 +210,7 @@ guides/models
 guides/training
 guides/custom-models
 guides/foundation-models
+guides/annotation-benchmarks
 guides/evaluation
 guides/visualization
 guides/comparison

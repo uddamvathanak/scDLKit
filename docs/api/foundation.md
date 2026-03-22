@@ -86,6 +86,8 @@ trainer.fit(split.train, split.val)
 - [Experimental scGPT PBMC embeddings](/_tutorials/scgpt_pbmc_embeddings)
 - [Experimental scGPT cell-type annotation](/_tutorials/scgpt_cell_type_annotation)
 - [Experimental scGPT dataset-specific annotation](/_tutorials/scgpt_dataset_specific_annotation)
+- [Experimental scGPT human-pancreas annotation](/_tutorials/scgpt_human_pancreas_annotation)
+- [Annotation benchmarks](/guides/annotation-benchmarks)
 
 ```{eval-rst}
 .. autoclass:: scdlkit.foundation.ScGPTPreparedData

@@ -179,6 +179,44 @@ TUTORIAL_SPECS = (
         ),
     ),
     TutorialSpec(
+        name="scgpt_human_pancreas_annotation",
+        group="foundation",
+        source=ROOT / "examples" / "scgpt_human_pancreas_annotation.ipynb",
+        executed_stem="scgpt_human_pancreas_annotation",
+        required_artifacts=(
+            ROOT / "artifacts" / "scgpt_human_pancreas_annotation" / "report.md",
+            ROOT / "artifacts" / "scgpt_human_pancreas_annotation" / "report.csv",
+            ROOT / "artifacts" / "scgpt_human_pancreas_annotation" / "strategy_metrics.csv",
+            (
+                ROOT
+                / "artifacts"
+                / "scgpt_human_pancreas_annotation"
+                / "best_strategy_confusion_matrix.png"
+            ),
+            ROOT / "artifacts" / "scgpt_human_pancreas_annotation" / "frozen_embedding_umap.png",
+            (
+                ROOT
+                / "artifacts"
+                / "scgpt_human_pancreas_annotation"
+                / "best_strategy_embedding_umap.png"
+            ),
+            (
+                ROOT
+                / "artifacts"
+                / "scgpt_human_pancreas_annotation"
+                / "best_model"
+                / "manifest.json"
+            ),
+            (
+                ROOT
+                / "artifacts"
+                / "scgpt_human_pancreas_annotation"
+                / "best_model"
+                / "model_state.pt"
+            ),
+        ),
+    ),
+    TutorialSpec(
         name="synthetic_smoke",
         group="classic",
         source=ROOT / "examples" / "first_run_synthetic.ipynb",

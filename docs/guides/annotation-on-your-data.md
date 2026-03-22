@@ -6,6 +6,7 @@ Related APIs:
 
 - [Experimental annotation quickstart API](../api/annotation.md)
 - [Experimental foundation helpers](../api/foundation.md)
+- [Annotation benchmarks](./annotation-benchmarks.md)
 
 The current scope is still narrow:
 
@@ -139,3 +140,8 @@ Drop down to the `Trainer` path when you want:
 The main product value of this path is not universal superiority. It is the ability to compare adaptation strategies on your own labeled dataset with a reproducible, Scanpy-compatible workflow.
 
 Under the hood, this top-level beginner path is still backed by the experimental scGPT `whole-human` workflow in `scdlkit.foundation`.
+
+If you want to see the same workflow on a non-PBMC human dataset before trying
+your own data, start with:
+
+- [Experimental scGPT human-pancreas annotation](/_tutorials/scgpt_human_pancreas_annotation)

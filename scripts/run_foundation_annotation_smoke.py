@@ -55,6 +55,7 @@ def main() -> None:
             dataset_name=dataset_name,
             adata=adata,
             label_key=spec.label_key,
+            batch_key=spec.batch_key,
             seed=seed,
             output_root=output_dir,
             model_name=model_name,

@@ -190,6 +190,8 @@ The lower-level `Trainer` path and `scdlkit.foundation` helpers remain the advan
 - frozen embeddings: [Experimental scGPT PBMC embeddings](/_tutorials/scgpt_pbmc_embeddings)
 - annotation tuning: [Experimental scGPT cell-type annotation](/_tutorials/scgpt_cell_type_annotation)
 - dataset-specific wrapper workflow: [Experimental scGPT dataset-specific annotation](/_tutorials/scgpt_dataset_specific_annotation)
+- beyond-PBMC wrapper workflow: [Experimental scGPT human-pancreas annotation](/_tutorials/scgpt_human_pancreas_annotation)
+- benchmark framing: [Annotation benchmarks](./annotation-benchmarks.md)
 - user-data guide: [Experimental annotation on your data](/guides/annotation-on-your-data)
 
 ## Positioning
@@ -204,5 +206,8 @@ The goal is not to claim that foundation models always beat classical baselines.
 - LoRA tuning
 
 That comparison story is the main product value of the current foundation release line.
+
+The current beyond-PBMC evidence phase uses OpenProblems human pancreas to
+show the same wrapper-first workflow on a second labeled human dataset.
 
 Treat `scdlkit.foundation` as the explicit lower-level experimental namespace that sits underneath the easier top-level beginner aliases.

@@ -175,6 +175,23 @@ Report, strategy metrics table, frozen UMAP, best-strategy UMAP, saved runner ma
 Related APIs:
 [Experimental annotation quickstart API](/api/annotation), [Experimental foundation helpers](/api/foundation)
 ```
+
+```{grid-item-card} Experimental scGPT human-pancreas annotation
+:link: /_tutorials/scgpt_human_pancreas_annotation
+:link-type: doc
+
+Audience:
+Researchers who want to see the wrapper-first annotation path on a non-PBMC human dataset.
+
+Question answered:
+Does the low-code adaptation workflow still hold up beyond PBMC on a real labeled human pancreas subset?
+
+Outputs:
+Report, strategy metrics table, frozen UMAP, best-strategy UMAP, saved runner manifest, saved runner weights.
+
+Related APIs:
+[Experimental annotation quickstart API](/api/annotation), [Experimental foundation helpers](/api/foundation)
+```
 ````
 
 ## Fallback path
@@ -211,7 +228,8 @@ Related APIs:
 7. Experimental scGPT PBMC embeddings
 8. Experimental scGPT cell-type annotation
 9. Experimental scGPT dataset-specific annotation
-10. Synthetic smoke tutorial
+10. Experimental scGPT human-pancreas annotation
+11. Synthetic smoke tutorial
 
 ## Researcher shortcut
 
@@ -220,6 +238,7 @@ Use this shorter route if your main question is how to adapt and fine-tune on a 
 1. Scanpy PBMC quickstart
 2. Experimental scGPT cell-type annotation
 3. Experimental scGPT dataset-specific annotation
+4. Experimental scGPT human-pancreas annotation
 
 ```{toctree}
 :hidden:
@@ -234,5 +253,6 @@ Use this shorter route if your main question is how to adapt and fine-tune on a 
 /_tutorials/scgpt_pbmc_embeddings
 /_tutorials/scgpt_cell_type_annotation
 /_tutorials/scgpt_dataset_specific_annotation
+/_tutorials/scgpt_human_pancreas_annotation
 /_tutorials/synthetic_smoke
 ```
