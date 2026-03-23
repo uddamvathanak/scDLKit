@@ -29,6 +29,11 @@ def _artifact_dir(root: Path, dataset: str, model: str) -> Path:
     pd.DataFrame(
         [{"batch": "batch_0", "n_cells": 8, "accuracy": 0.80, "macro_f1": 0.75}]
     ).to_csv(path / "batch_metrics.csv", index=False)
+    if model in {"scgpt_head", "scgpt_lora"}:
+        best_model_dir = path / "best_model"
+        best_model_dir.mkdir(parents=True, exist_ok=True)
+        (best_model_dir / "manifest.json").write_text("{}", encoding="utf-8")
+        (best_model_dir / "model_state.pt").write_text("weights", encoding="utf-8")
     return path
 
 
@@ -58,6 +63,11 @@ def _rows_for_dataset(root: Path, dataset: str) -> list[dict[str, object]]:
                 "batch_accuracy_min": 0.78,
                 "batch_macro_f1_mean": 0.75,
                 "batch_macro_f1_min": 0.72,
+                "best_model_artifact": (
+                    str(artifact_dir / "best_model")
+                    if model in {"scgpt_head", "scgpt_lora"}
+                    else None
+                ),
                 "batch_metrics_artifact": str(artifact_dir / "batch_metrics.csv"),
                 "confusion_matrix_artifact": str(artifact_dir / "confusion_matrix.png"),
                 "latent_umap_artifact": str(artifact_dir / "latent_umap.png"),
@@ -85,21 +95,6 @@ def test_run_external_annotation_evidence_writes_required_outputs(
             type("Spec", (), {"label_key": "cell_type", "batch_key": "batch"})(),
         ),
     )
-
-    class _FakeRunner:
-        def __init__(self, *args, **kwargs) -> None:
-            self.fitted = False
-
-        def fit_compare(self, adata: AnnData) -> None:
-            self.fitted = True
-
-        def save(self, path: Path) -> Path:
-            path.mkdir(parents=True, exist_ok=True)
-            (path / "manifest.json").write_text("{}", encoding="utf-8")
-            (path / "model_state.pt").write_text("weights", encoding="utf-8")
-            return path
-
-    monkeypatch.setattr(external_evidence, "AnnotationRunner", _FakeRunner)
 
     output_dir = tmp_path / "evidence"
     outputs = external_evidence.run_external_annotation_evidence(output_dir=output_dir)

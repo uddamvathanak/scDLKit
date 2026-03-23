@@ -12,7 +12,7 @@ env:
 jobs:
   external-annotation-evidence:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 150
     permissions:
       contents: read
     steps:
@@ -21,7 +21,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Restore foundation and dataset cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ env.SCDLKIT_CACHE_DIR }}
           key: scgpt-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
@@ -38,7 +38,7 @@ jobs:
             --only scgpt_human_pancreas_annotation.ipynb \
             --skip-assets
       - name: Upload external annotation evidence artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: external-annotation-evidence
           path: |

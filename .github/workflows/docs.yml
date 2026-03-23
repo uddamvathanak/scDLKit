@@ -30,7 +30,7 @@ jobs:
       - name: Prepare classic tutorial notebooks
         run: python scripts/prepare_tutorial_notebooks.py --execute published --group classic --skip-assets
       - name: Upload classic tutorial notebooks
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: docs-tutorials-classic
           path: docs/_tutorials
@@ -45,7 +45,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Restore scGPT checkpoint cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ env.SCDLKIT_CACHE_DIR }}
           key: scgpt-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
@@ -56,7 +56,7 @@ jobs:
       - name: Prepare foundation embedding tutorial notebook
         run: python scripts/prepare_tutorial_notebooks.py --execute published --only scgpt_pbmc_embeddings.ipynb --skip-assets
       - name: Upload foundation embedding tutorial notebook
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: docs-tutorials-foundation-embedding
           path: docs/_tutorials
@@ -71,7 +71,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Restore scGPT checkpoint cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ env.SCDLKIT_CACHE_DIR }}
           key: scgpt-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
@@ -86,7 +86,7 @@ jobs:
             --only scgpt_cell_type_annotation.ipynb scgpt_dataset_specific_annotation.ipynb \
             --skip-assets
       - name: Upload foundation annotation tutorial notebook
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: docs-tutorials-foundation-annotation
           path: docs/_tutorials
@@ -101,7 +101,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Restore foundation and dataset cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ env.SCDLKIT_CACHE_DIR }}
           key: scgpt-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
@@ -116,7 +116,7 @@ jobs:
             --only scgpt_human_pancreas_annotation.ipynb \
             --skip-assets
       - name: Upload pancreas annotation tutorial notebook
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: docs-tutorials-pancreas-annotation
           path: docs/_tutorials
@@ -156,22 +156,22 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e .[docs,foundation]
       - name: Download classic tutorial notebooks
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: docs-tutorials-classic
           path: downloaded-docs/classic
       - name: Download foundation embedding tutorial notebook
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: docs-tutorials-foundation-embedding
           path: downloaded-docs/foundation-embedding
       - name: Download foundation annotation tutorial notebook
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: docs-tutorials-foundation-annotation
           path: downloaded-docs/foundation-annotation
       - name: Download pancreas annotation tutorial notebook
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: docs-tutorials-pancreas-annotation
           path: downloaded-docs/pancreas-annotation

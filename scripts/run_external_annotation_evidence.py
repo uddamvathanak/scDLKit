@@ -23,8 +23,6 @@ from run_quality_suite import (  # noqa: E402
     run_scgpt_annotation_strategy,
 )
 
-from scdlkit import AnnotationRunner  # noqa: E402
-
 _DATASET_ORDER = ("pbmc68k_reduced", "openproblems_human_pancreas")
 _MODEL_ORDER = (
     "pca_logistic_annotation",
@@ -38,6 +36,7 @@ _DISPLAY_NAMES = {
     "scgpt_head": "scGPT head-only tuning",
     "scgpt_lora": "scGPT LoRA tuning",
 }
+_STRATEGY_PROFILE = "ci"
 
 
 def parse_args() -> argparse.Namespace:
@@ -79,6 +78,7 @@ def _strategy_frame(rows: list[dict[str, Any]]) -> pd.DataFrame:
         "batch_macro_f1_mean",
         "batch_macro_f1_min",
         "artifact_dir",
+        "best_model_artifact",
         "batch_metrics_artifact",
         "confusion_matrix_artifact",
         "latent_umap_artifact",
@@ -113,6 +113,16 @@ def _copy_file(source: str | Path, destination: Path) -> None:
         raise FileNotFoundError(msg)
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source_path, destination)
+
+
+def _copy_tree(source: str | Path, destination: Path) -> None:
+    source_path = Path(source)
+    if not source_path.exists():
+        msg = f"Expected artifact directory '{source_path}' is missing."
+        raise FileNotFoundError(msg)
+    if destination.exists():
+        shutil.rmtree(destination)
+    shutil.copytree(source_path, destination)
 
 
 def _write_markdown_table(frame: pd.DataFrame) -> str:
@@ -209,7 +219,7 @@ def _collect_dataset_rows(
             batch_key=spec.batch_key,
             seed=42,
             output_root=output_root,
-            profile="full",
+            profile=_STRATEGY_PROFILE,
         )
     ]
     for model_name in ("scgpt_frozen_probe", "scgpt_head", "scgpt_lora"):
@@ -222,7 +232,7 @@ def _collect_dataset_rows(
                 seed=42,
                 output_root=output_root,
                 model_name=model_name,
-                profile="full",
+                profile=_STRATEGY_PROFILE,
             )
         )
     return rows
@@ -275,16 +285,19 @@ def run_external_annotation_evidence(*, output_dir: Path) -> dict[str, Path]:
         best_overall["confusion_matrix_artifact"],
         pancreas_root / "best_strategy_confusion_matrix.png",
     )
-
-    pancreas_adata, _ = _load_dataset("openproblems_human_pancreas", profile="full")
-    trainable_runner = AnnotationRunner(
-        label_key="cell_type",
-        strategies=("head", "lora"),
-        batch_size=64,
-        device="auto",
+    trainable_rows = pancreas_frame[
+        pancreas_frame["model"].isin(("scgpt_head", "scgpt_lora"))
+    ].sort_values(
+        ["macro_f1", "accuracy", "trainable_parameters", "runtime_sec"],
+        ascending=[False, False, True, True],
+        kind="mergesort",
     )
-    trainable_runner.fit_compare(pancreas_adata)
-    trainable_runner.save(pancreas_root / "best_model")
+    if not trainable_rows.empty:
+        best_trainable_artifact = trainable_rows.iloc[0].get("best_model_artifact")
+        if not best_trainable_artifact:
+            msg = "Best trainable pancreas strategy is missing a saved checkpoint artifact."
+            raise FileNotFoundError(msg)
+        _copy_tree(best_trainable_artifact, pancreas_root / "best_model")
 
     cross_dataset_frame = strategy_frame[
         ["dataset", "strategy", "accuracy", "macro_f1", "runtime_sec", "trainable_parameters"]

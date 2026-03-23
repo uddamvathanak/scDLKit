@@ -529,6 +529,57 @@ def _batch_metric_summary(batch_metrics: pd.DataFrame) -> dict[str, float]:
     }
 
 
+def _save_trainable_annotation_checkpoint(
+    *,
+    output_dir: Path,
+    model: Any,
+    label_key: str,
+    label_categories: list[str],
+    best_strategy: str,
+    batch_size: int,
+    random_state: int,
+    trainable_parameters: int,
+    metrics: dict[str, Any],
+    lora_config: dict[str, Any] | None,
+) -> Path:
+    import torch
+
+    checkpoint_dir = output_dir / "best_model"
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    strategy_metrics = {
+        "strategy": best_strategy,
+        "accuracy": float(metrics["accuracy"]),
+        "macro_f1": float(metrics["macro_f1"]),
+        "runtime_sec": float(metrics["runtime_sec"]),
+        "trainable_parameters": int(trainable_parameters),
+    }
+    manifest = {
+        "checkpoint_id": "whole-human",
+        "label_key": label_key,
+        "label_categories": list(label_categories),
+        "best_strategy": best_strategy,
+        "strategies": [best_strategy],
+        "batch_size": int(batch_size),
+        "val_size": 0.15,
+        "test_size": 0.15,
+        "random_state": int(random_state),
+        "classifier_dropout": 0.1,
+        "lora_config": lora_config,
+        "metrics": strategy_metrics,
+        "strategy_metrics": [strategy_metrics],
+        "output_dir": str(output_dir),
+    }
+    (checkpoint_dir / "manifest.json").write_text(
+        json.dumps(manifest, indent=2),
+        encoding="utf-8",
+    )
+    torch.save(
+        {"kind": "torch_state_dict", "state_dict": model.state_dict()},
+        checkpoint_dir / "model_state.pt",
+    )
+    return checkpoint_dir
+
+
 def _prepare_annotation_benchmark_adata(
     dataset_name: str,
     adata: AnnData,
@@ -1116,6 +1167,7 @@ def run_scgpt_annotation_strategy(
     started_at = perf_counter()
     if model_name == "scgpt_frozen_probe":
         model = load_scgpt_model("whole-human", device="auto")
+        lora_config_payload = None
         trainer = Trainer(
             model=model,
             task="representation",
@@ -1140,6 +1192,16 @@ def run_scgpt_annotation_strategy(
         trainable_parameters = 0
     else:
         tuning_strategy = "head" if model_name == "scgpt_head" else "lora"
+        lora_config_payload = (
+            {
+                "rank": 4,
+                "alpha": 8.0,
+                "dropout": 0.05,
+                "target_modules": ["linear1", "linear2"],
+            }
+            if tuning_strategy == "lora"
+            else None
+        )
         model = load_scgpt_annotation_model(
             num_classes=len(label_categories),
             checkpoint="whole-human",
@@ -1148,12 +1210,14 @@ def run_scgpt_annotation_strategy(
             device="auto",
             lora_config=(
                 ScGPTLoRAConfig(
-                    rank=4,
-                    alpha=8.0,
-                    dropout=0.05,
-                    target_modules=("linear1", "linear2"),
+                    rank=int(lora_config_payload["rank"]),
+                    alpha=float(lora_config_payload["alpha"]),
+                    dropout=float(lora_config_payload["dropout"]),
+                    target_modules=tuple(
+                        str(value) for value in lora_config_payload["target_modules"]
+                    ),
                 )
-                if tuning_strategy == "lora"
+                if lora_config_payload is not None
                 else None
             ),
         )
@@ -1220,6 +1284,27 @@ def run_scgpt_annotation_strategy(
         ]
     ).to_csv(output_dir / "report.csv", index=False)
 
+    best_model_artifact = None
+    if model_name != "scgpt_frozen_probe":
+        best_model_artifact = str(
+            _save_trainable_annotation_checkpoint(
+                output_dir=output_dir,
+                model=model,
+                label_key=label_key,
+                label_categories=label_categories,
+                best_strategy=tuning_strategy,
+                batch_size=prepared.batch_size,
+                random_state=seed,
+                trainable_parameters=trainable_parameters,
+                metrics={
+                    "accuracy": metrics["accuracy"],
+                    "macro_f1": metrics["macro_f1"],
+                    "runtime_sec": runtime_sec,
+                },
+                lora_config=lora_config_payload,
+            )
+        )
+
     return {
         "dataset": dataset_name,
         "task": "foundation_annotation",
@@ -1230,6 +1315,7 @@ def run_scgpt_annotation_strategy(
         "peak_memory_mb": _process_peak_memory_mb(),
         "artifact_dir": str(output_dir),
         "trainable_parameters": trainable_parameters,
+        "best_model_artifact": best_model_artifact,
         "batch_metrics_artifact": str(output_dir / "batch_metrics.csv"),
         "confusion_matrix_artifact": str(output_dir / "confusion_matrix.png"),
         "latent_umap_artifact": str(output_dir / "latent_umap.png"),

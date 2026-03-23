@@ -2,13 +2,13 @@
 
 ## Current phase
 
-scDLKit is now in a cautious experimental adaptation evidence phase.
+scDLKit is now in a cautious experimental adaptation release-validation phase.
 
 The documentation and ease-of-use hardening work from `0.1.6` remains a
-standing release gate, but the active product question is narrower:
+standing release gate, and the active product question is now narrower:
 
-- can the current wrapper-first scGPT annotation workflow show useful evidence
-  beyond PBMC on another labeled human dataset?
+- can the current wrapper-first scGPT annotation workflow hold up end to end on
+  the heavier beyond-PBMC evidence path and release cleanly as `0.1.7`?
 
 The narrow experimental scGPT bridge remains in scope, but it still has to
 satisfy the same documentation contract as the stable baseline path.
@@ -21,7 +21,8 @@ Current goals:
 - keep fine-tuning and dataset adaptation visible earlier in the quickstart-facing docs for researchers with labeled data
 - preserve the hardened downstream Scanpy and reconstruction tutorials
 - keep the frozen scGPT bridge and annotation fine-tuning path experimental and inspectable
-- add beyond-PBMC evidence without weakening benchmark or tutorial quality gates
+- validate and publish the beyond-PBMC evidence path without weakening benchmark or tutorial quality gates
+- turn the first heavy pancreas evidence run into release-facing artifacts and benchmark guidance
 - keep the project gene-expression-focused while the foundation path matures
 
 ## What scDLKit currently emphasizes
@@ -60,10 +61,12 @@ For researcher-facing onboarding, the public story should also answer these ques
 - an experimental annotation-only scGPT fine-tuning path through `Trainer`
 - an easy dataset-specific scGPT annotation wrapper that compares strategies and saves the best fitted runner
 - a unified top-level experimental annotation quickstart alias for easier beginner discovery
+- beyond-PBMC annotation evidence on cached OpenProblems human pancreas subsets
+- a heavier external annotation evidence workflow outside normal PR CI
 
 ## Next feature phase
 
-Target after this release: beyond-PBMC evidence on OpenProblems human pancreas
+Target after `0.1.7`: strengthen adaptation evidence beyond the first pancreas release
 
 Planned direction:
 
@@ -71,9 +74,9 @@ Planned direction:
 - keep the built-in registry path for bundled baselines unchanged
 - keep scGPT fine-tuning experimental, narrow, and easy to inspect through tutorials, reports, and wrapper artifacts
 - keep the beginner annotation path low-code and CPU-practical by default
-- benchmark the wrapper-first annotation path on a cached human pancreas subset in addition to PBMC
-- compare `PCA + logistic regression`, frozen scGPT, head-only tuning, and LoRA without making universal superiority claims
-- add a heavier manual or scheduled workflow for external annotation evidence instead of pushing that cost into normal PR CI
+- extend the evidence story beyond the first pancreas benchmark instead of stopping at a single beyond-PBMC example
+- compare `PCA + logistic regression`, frozen scGPT, head-only tuning, and LoRA across additional labeled human settings without making universal superiority claims
+- turn the heaviest and most useful comparison outputs into shorter researcher-facing guides, examples, and release evidence
 - evaluate broader adaptation strategies only after they are benchmarked against the current baselines and frozen foundation path
 - defer broad foundation abstractions until the scGPT adaptation path is stable
 
@@ -89,9 +92,9 @@ Near-term product and outreach work should stay close to the real researcher que
 ## Immediate next tasks
 
 - keep the default quickstart ladder on `frozen_probe` plus `head` unless runtime and usability data justify broadening it
-- add deterministic download-and-cache support for OpenProblems human pancreas
-- publish a beyond-PBMC annotation tutorial on the cached pancreas quickstart subset
-- add a benchmark guide that compares PBMC and human pancreas outcomes without overclaiming
+- run the heavy external annotation evidence workflow and validate the first end-to-end pancreas benchmark artifacts
+- prepare and publish `0.1.7` once the heavy evidence workflow is green
+- update GitHub Actions dependencies away from the remaining Node 20 deprecation warnings
 - keep turning the most common researcher questions into short docs, comparison tables, reusable examples, and release-facing evidence
 
 ## Deferred work
