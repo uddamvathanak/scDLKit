@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.7
+
+- Added beyond-PBMC experimental annotation evidence on cached OpenProblems human pancreas subsets while keeping the public beginner surface unchanged.
+- Added a heavier external annotation evidence workflow, a pancreas tutorial, and a benchmark guide so the wrapper-first scGPT annotation path can be evaluated on a non-PBMC human dataset.
+- Normalized the live OpenProblems pancreas schema into the canonical internal annotation fields expected by the cached subset builder and public tutorial path.
+- Hardened the heavy pancreas evidence workflow by reusing saved trainable checkpoints instead of retraining the best model and by isolating the heavier path outside normal PR CI.
+- Updated GitHub Actions maintenance dependencies to the current action major versions and raised the heavy evidence workflow timeout so the beyond-PBMC path can complete cleanly.
+
 ## 0.1.6
 
 - Added a unified experimental annotation quickstart at the top-level package with `adapt_annotation(...)`, `inspect_annotation_data(...)`, and `AnnotationRunner`.
