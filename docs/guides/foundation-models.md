@@ -194,7 +194,7 @@ The lower-level `Trainer` path and `scdlkit.foundation` helpers remain the advan
 - benchmark framing: [Annotation benchmarks](./annotation-benchmarks.md)
 - user-data guide: [Experimental annotation on your data](/guides/annotation-on-your-data)
 
-## Positioning
+## Experimental scope
 
 This feature should be treated as experimental.
 

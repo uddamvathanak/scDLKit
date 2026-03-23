@@ -191,12 +191,12 @@ Quickstart embedding colored by the PBMC reference labels.
 Leiden clustering on the same embedding after handing control back to Scanpy.
 ```
 
-## Positioning
+## Current scope
 
 - Scanpy still owns raw-data preprocessing, QC, and most exploratory analysis.
-- scDLKit owns the model-training, evaluation, comparison, and output-handoff layer.
-- The main public scope is still gene-expression-first.
-- Experimental foundation-model content remains clearly separated from the stable beginner path.
+- scDLKit focuses on model training, evaluation, comparison, and output handoff.
+- The main public scope remains gene-expression-first.
+- Experimental foundation-model content stays separated from the stable beginner path.
 
 ```{toctree}
 :hidden:

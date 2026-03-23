@@ -11,8 +11,8 @@ sys.path.insert(0, str(ROOT / "src"))
 from scdlkit import __version__  # noqa: E402
 
 project = "scDLKit"
-copyright = "2026, Rom Uddamvathanak"
-author = "Rom Uddamvathanak"
+copyright = "2026, scDLKit contributors"
+author = "scDLKit contributors"
 release = __version__
 version = __version__
 

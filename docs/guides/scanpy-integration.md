@@ -65,7 +65,7 @@ reconstructed = runner.reconstruct(adata)
 | Wrap a custom PyTorch module | scDLKit | [Custom model extension](/_tutorials/custom_model_extension) |
 | Try the experimental frozen foundation path | scDLKit | [Experimental scGPT PBMC embeddings](/_tutorials/scgpt_pbmc_embeddings) |
 
-## Positioning
+## Current scope
 
 scDLKit is not a replacement for Scanpy.
 
