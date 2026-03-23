@@ -66,7 +66,7 @@ jobs:
         run: python -m jupyter nbconvert --to notebook --execute examples/first_run_synthetic.ipynb --output first_run_synthetic.ci.executed.ipynb --output-dir artifacts/notebooks --ExecutePreprocessor.timeout=0
       - name: Upload smoke artifacts
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: smoke-${{ matrix.os }}
           path: artifacts
@@ -88,7 +88,7 @@ jobs:
         run: python scripts/execute_tutorial_suite.py --profile ci --group classic --check
       - name: Upload tutorial artifacts
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: tutorial-smoke-classic-ubuntu
           path: artifacts
@@ -115,7 +115,7 @@ jobs:
         run: python scripts/execute_tutorial_suite.py --profile ci --only scgpt_pbmc_embeddings --check
       - name: Upload foundation embedding tutorial artifacts
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: tutorial-smoke-foundation-embeddings-ubuntu
           path: artifacts
@@ -146,7 +146,7 @@ jobs:
             --check
       - name: Upload foundation annotation tutorial artifacts
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: tutorial-smoke-foundation-annotation-ubuntu
           path: artifacts
@@ -178,7 +178,7 @@ jobs:
           python scripts/run_foundation_smoke.py
       - name: Upload foundation smoke artifacts
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: foundation-smoke-${{ matrix.os }}
           path: |
@@ -207,7 +207,7 @@ jobs:
         run: python scripts/run_foundation_annotation_smoke.py
       - name: Upload foundation annotation metrics
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: foundation-annotation-metrics-ubuntu
           path: artifacts/foundation_annotation_smoke
@@ -238,22 +238,22 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e .[dev,tutorials,foundation]
       - name: Download classic tutorial smoke artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: tutorial-smoke-classic-ubuntu
           path: downloaded-artifacts/classic
       - name: Download foundation embedding tutorial smoke artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: tutorial-smoke-foundation-embeddings-ubuntu
           path: downloaded-artifacts/foundation-embeddings
       - name: Download foundation annotation tutorial smoke artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: tutorial-smoke-foundation-annotation-ubuntu
           path: downloaded-artifacts/foundation-annotation
       - name: Download foundation annotation metrics
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: foundation-annotation-metrics-ubuntu
           path: downloaded-artifacts/foundation-annotation-metrics
@@ -275,7 +275,7 @@ jobs:
             --require-rc
       - name: Upload quality artifacts
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: quality-regression-artifacts
           path: artifacts/quality

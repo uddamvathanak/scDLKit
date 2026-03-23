@@ -34,7 +34,7 @@ jobs:
           python -m build
           python -m twine check dist/*
       - name: Upload distributions
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: python-package-distributions
           path: dist
@@ -48,7 +48,7 @@ jobs:
       name: testpypi
     steps:
       - name: Download distributions
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: python-package-distributions
           path: dist
@@ -87,7 +87,7 @@ jobs:
         run: python -m jupyter nbconvert --to notebook --execute examples/train_vae_pbmc.ipynb --output scanpy_pbmc_quickstart.testpypi.executed.ipynb --output-dir artifacts/notebooks --ExecutePreprocessor.timeout=0
       - name: Upload smoke artifacts
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: testpypi-smoke-${{ matrix.os }}
           path: artifacts
@@ -112,7 +112,7 @@ jobs:
         run: python scripts/run_foundation_annotation_smoke.py
       - name: Upload foundation smoke artifacts
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: testpypi-foundation-smoke-ubuntu
           path: artifacts

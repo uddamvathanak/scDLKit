@@ -38,7 +38,7 @@ jobs:
             --only scgpt_human_pancreas_annotation.ipynb \
             --skip-assets
       - name: Upload external annotation evidence artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: external-annotation-evidence
           path: |
