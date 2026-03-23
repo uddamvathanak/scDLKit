@@ -8,13 +8,48 @@
 [![PyPI total downloads](https://img.shields.io/pypi/dt/scdlkit)](https://pypistats.org/packages/scdlkit)
 [![GitHub stars](https://img.shields.io/github/stars/uddamvathanak/scDLKit?style=social)](https://github.com/uddamvathanak/scDLKit/stargazers)
 
-Train, evaluate, compare, and visualize baseline deep-learning models for single-cell data without writing PyTorch from scratch.
+Train, evaluate, compare, and visualize baseline deep-learning models for
+single-cell data without writing PyTorch from scratch.
+
+scDLKit is now shifting toward a publication-first research identity.
+
+Available now:
+
+- stable baseline workflows through `TaskRunner`
+- experimental labeled annotation adaptation through `adapt_annotation(...)`
+
+Paper target:
+
+- a minimal-code, AnnData-native framework for parameter-efficient adaptation
+  and reproducible benchmarking of single-cell and spatial foundation models
+- four research tasks:
+  - annotation
+  - integration
+  - perturbation
+  - spatial
+- four model pillars:
+  - `scGPT`
+  - `scFoundation`
+  - `CellFM`
+  - `Nicheformer`
 
 Choose the entrypoint by user goal:
 
 - stable embeddings and baseline models: `TaskRunner`
 - experimental labeled annotation adaptation: `adapt_annotation(...)`
 - lower-level control and custom models: `Trainer` plus adapters
+
+## Research Task Map
+
+- `Pilot`: cell type annotation
+- `Planned`: integration / representation transfer
+- `Planned`: perturbation-response prediction
+- `Planned`: spatial domain / niche classification
+
+Use the roadmap when you want the difference between current implementation
+truth and paper-target scope:
+
+- [Roadmap](https://uddamvathanak.github.io/scDLKit/roadmap.html)
 
 ## Quick Start
 
@@ -126,8 +161,9 @@ Related docs:
 - Install path for tutorials: `python -m pip install "scdlkit[tutorials]"`
 - Experimental foundation path: `python -m pip install "scdlkit[foundation,tutorials]"`
 - CPU and GPU use the same notebook path through `device="auto"`
-- Core learning path: quickstart -> downstream Scanpy -> comparison -> reconstruction sanity check
-- Researcher shortcut for labeled data: quickstart -> experimental scGPT cell-type annotation -> experimental dataset-specific annotation
+- Core learning path: quickstart -> downstream Scanpy -> comparison
+- Research task map: annotation pilot -> planned integration -> planned perturbation -> planned spatial
+- Supporting workflows: reconstruction, custom models, and low-level foundation notebooks remain available but are no longer the main public task surface
 - Beyond-PBMC annotation tutorial: `examples/scgpt_human_pancreas_annotation.ipynb`
 - Secondary notebooks: `examples/compare_models_pbmc.ipynb`, `examples/classification_demo.ipynb`
 - Downstream Scanpy notebook: `examples/downstream_scanpy_after_scdlkit.ipynb`

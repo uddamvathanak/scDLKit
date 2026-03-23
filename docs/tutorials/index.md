@@ -1,12 +1,89 @@
 # Tutorials
 
-The tutorial path is intentionally Scanpy-first and model-focused.
+scDLKit now presents its public tutorial surface around four research tasks.
 
-If you are coming in with labeled data and your main interest is fine-tuning, jump to the experimental scGPT annotation tutorials after the main PBMC quickstart.
+The goal is to make the paper identity obvious without pretending that every
+task is already implemented at equal maturity.
 
-The goal is not to replace Scanpy's preprocessing tutorials. The goal is to show where scDLKit enters the workflow, what outputs it creates, and how those outputs move back into normal Scanpy analysis.
+## Main research tasks
 
-## Core path
+````{grid} 1 2 2 2
+:gutter: 2
+
+```{grid-item-card} Cell type annotation
+:link: /_tutorials/scgpt_human_pancreas_annotation
+:link-type: doc
+
+Status: `Pilot`
+
+Question answered:
+Can scDLKit already support a credible low-code adaptation story on labeled
+human data?
+
+Model and task scope:
+Current pilot uses the experimental scGPT adaptation path on labeled human
+single-cell RNA data.
+
+Figure role:
+Primary supervised adaptation and PEFT comparison figure family.
+```
+
+```{grid-item-card} Integration / representation transfer
+:link: /roadmap#integration-pillar
+:link-type: url
+
+Status: `Planned`
+
+Question answered:
+Can adapted representations preserve biological structure while reducing
+technical variation across studies or batches?
+
+Model and task scope:
+Planned as a paper task with a formal integration metric pipeline.
+
+Figure role:
+Cross-study transfer and batch-mixing figure family.
+```
+
+```{grid-item-card} Perturbation-response prediction
+:link: /roadmap#perturbation-pillar
+:link-type: url
+
+Status: `Planned`
+
+Question answered:
+Can the adapted model recover perturbation-response structure under a unified
+benchmark interface?
+
+Model and task scope:
+Planned as a dedicated perturbation benchmark pillar.
+
+Figure role:
+Response-prediction and low-label efficiency figure family.
+```
+
+```{grid-item-card} Spatial domain / niche classification
+:link: /roadmap#spatial-pillar
+:link-type: url
+
+Status: `Planned`
+
+Question answered:
+Can scDLKit support spatial task adaptation as a real paper pillar rather than
+an appendix claim?
+
+Model and task scope:
+Planned around the Nicheformer-facing spatial benchmark story.
+
+Figure role:
+Spatial qualitative and task-performance figure family.
+```
+````
+
+## Supporting workflows
+
+These are still valuable and still public, but they are not the main paper-task
+surface.
 
 ````{grid} 1 2 2 2
 :gutter: 2
@@ -16,16 +93,10 @@ The goal is not to replace Scanpy's preprocessing tutorials. The goal is to show
 :link-type: doc
 
 Audience:
-Researchers and analysts starting the main baseline workflow.
-
-Question answered:
-How do I train a first model and get an embedding back into `adata.obsm`?
+Users starting the stable baseline workflow.
 
 Outputs:
 Latent embedding, report, loss curve, latent UMAP.
-
-Related APIs:
-[TaskRunner](/api/taskrunner), [Data preparation](/api/data)
 ```
 
 ```{grid-item-card} Downstream Scanpy after scDLKit
@@ -33,212 +104,58 @@ Related APIs:
 :link-type: doc
 
 Audience:
-Readers who want the missing interpretation layer after the embedding step.
-
-Question answered:
-What should I do in Scanpy after scDLKit has produced an embedding?
+Users who want the Scanpy interpretation layer after the model step.
 
 Outputs:
-Latent UMAP, Leiden UMAP, marker dotplot, ranked markers, downstream report.
-
-Related APIs:
-[TaskRunner](/api/taskrunner)
+Latent UMAP, Leiden UMAP, markers, downstream report.
 ```
-````
-
-## Validation path
-
-````{grid} 1 2 2 2
-:gutter: 2
 
 ```{grid-item-card} PBMC model comparison
 :link: /_tutorials/pbmc_model_comparison
 :link-type: doc
 
 Audience:
-Users deciding whether a deeper baseline is worth it.
-
-Question answered:
-Does `PCA` already solve enough of the problem, or does a deeper model buy useful structure?
+Users validating whether deeper baselines help beyond `PCA`.
 
 Outputs:
-Benchmark CSV, comparison figure, PCA reference UMAP, best baseline UMAP.
-
-Related APIs:
-[Evaluation and outputs](/api/evaluation), [TaskRunner](/api/taskrunner)
-```
-
-```{grid-item-card} Reconstruction sanity check
-:link: /_tutorials/reconstruction_sanity_pbmc
-:link-type: doc
-
-Audience:
-Users who need to inspect predicted or reconstructed gene-expression values.
-
-Question answered:
-How do I retrieve reconstructed expression, and what is a reasonable sanity check for it?
-
-Outputs:
-Report, loss curve, reconstruction scatter, gene-panel reconstruction summary.
-
-Related APIs:
-[TaskRunner](/api/taskrunner), [Evaluation and outputs](/api/evaluation)
+Benchmark CSV, comparison figure, baseline reference UMAPs.
 ```
 ````
 
-## Extension path
+## Advanced / appendix workflows
 
-````{grid} 1 2 2 2
-:gutter: 2
+These remain documented and tested, but they are no longer equal to the four
+main research task tracks.
 
-```{grid-item-card} PBMC classification
-:link: /_tutorials/pbmc_classification
-:link-type: doc
+### Advanced appendix
 
-Audience:
-Users who want a simple supervised baseline.
+- [Reconstruction sanity check](/_tutorials/reconstruction_sanity_pbmc)
+- [Custom model extension](/_tutorials/custom_model_extension)
+- [Experimental scGPT PBMC embeddings](/_tutorials/scgpt_pbmc_embeddings)
 
-Question answered:
-What does a lightweight classifier baseline look like in the same toolkit?
+### Experimental detail appendix
 
-Outputs:
-Report, loss curve, confusion matrix.
+- [Experimental scGPT cell-type annotation](/_tutorials/scgpt_cell_type_annotation)
+- [Experimental scGPT dataset-specific annotation](/_tutorials/scgpt_dataset_specific_annotation)
+- [Experimental scGPT human-pancreas annotation](/_tutorials/scgpt_human_pancreas_annotation)
 
-Related APIs:
-[TaskRunner](/api/taskrunner), [Evaluation and outputs](/api/evaluation)
-```
+### Maintainer and smoke path
 
-```{grid-item-card} Custom model extension
-:link: /_tutorials/custom_model_extension
-:link-type: doc
+- [Synthetic smoke tutorial](/_tutorials/synthetic_smoke)
 
-Audience:
-Users bringing their own PyTorch module.
+## Reading order
 
-Question answered:
-How do I validate a wrapped custom model inside scDLKit before building on top of it?
+If you want the current stable baseline path first:
 
-Outputs:
-Report, loss curve, latent UMAP.
+1. [Scanpy PBMC quickstart](/_tutorials/scanpy_pbmc_quickstart)
+2. [Downstream Scanpy after scDLKit](/_tutorials/downstream_scanpy_after_scdlkit)
+3. [PBMC model comparison](/_tutorials/pbmc_model_comparison)
 
-Related APIs:
-[Trainer](/api/trainer), [Adapters](/api/adapters)
-```
+If you want the current research-facing annotation path first:
 
-```{grid-item-card} Experimental scGPT PBMC embeddings
-:link: /_tutorials/scgpt_pbmc_embeddings
-:link-type: doc
-
-Audience:
-Users who want an experimental foundation-model reference.
-
-Question answered:
-How do I extract frozen scGPT embeddings and return them to Scanpy?
-
-Outputs:
-Report, latent UMAP, frozen linear-probe confusion matrix, embedding summary.
-
-Related APIs:
-[Experimental foundation helpers](/api/foundation)
-```
-
-```{grid-item-card} Experimental scGPT cell-type annotation
-:link: /_tutorials/scgpt_cell_type_annotation
-:link-type: doc
-
-Audience:
-Users who want to compare frozen and fine-tuned scGPT strategies on a labeled dataset.
-
-Question answered:
-Do I need only frozen scGPT embeddings, a trainable classification head, or LoRA tuning?
-
-Outputs:
-Report, strategy metrics table, frozen UMAP, LoRA UMAP, best-strategy confusion matrix.
-
-Related APIs:
-[Experimental foundation helpers](/api/foundation), [Experimental annotation quickstart API](/api/annotation)
-```
-
-```{grid-item-card} Experimental scGPT dataset-specific annotation
-:link: /_tutorials/scgpt_dataset_specific_annotation
-:link-type: doc
-
-Audience:
-Users who want the easiest wrapper-first path for adapting scGPT to a labeled dataset with minimal code.
-
-Question answered:
-How do I inspect my dataset, compare strategies, annotate `AnnData`, and save the best fitted runner in one workflow?
-
-Outputs:
-Report, strategy metrics table, frozen UMAP, best-strategy UMAP, saved runner manifest, saved runner weights.
-
-Related APIs:
-[Experimental annotation quickstart API](/api/annotation), [Experimental foundation helpers](/api/foundation)
-```
-
-```{grid-item-card} Experimental scGPT human-pancreas annotation
-:link: /_tutorials/scgpt_human_pancreas_annotation
-:link-type: doc
-
-Audience:
-Researchers who want to see the wrapper-first annotation path on a non-PBMC human dataset.
-
-Question answered:
-Does the low-code adaptation workflow still hold up beyond PBMC on a real labeled human pancreas subset?
-
-Outputs:
-Report, strategy metrics table, frozen UMAP, best-strategy UMAP, saved runner manifest, saved runner weights.
-
-Related APIs:
-[Experimental annotation quickstart API](/api/annotation), [Experimental foundation helpers](/api/foundation)
-```
-````
-
-## Fallback path
-
-````{grid} 1 1 1 1
-:gutter: 2
-
-```{grid-item-card} Synthetic smoke tutorial
-:link: /_tutorials/synthetic_smoke
-:link-type: doc
-
-Audience:
-Users who want the smallest possible end-to-end example.
-
-Question answered:
-Can I smoke-test the basic workflow with minimal setup?
-
-Outputs:
-Report, loss curve, latent PCA.
-
-Related APIs:
-[TaskRunner](/api/taskrunner)
-```
-````
-
-## Recommended order
-
-1. Scanpy PBMC quickstart
-2. Downstream Scanpy after scDLKit
-3. PBMC model comparison
-4. Reconstruction sanity check
-5. PBMC classification
-6. Custom model extension
-7. Experimental scGPT PBMC embeddings
-8. Experimental scGPT cell-type annotation
-9. Experimental scGPT dataset-specific annotation
-10. Experimental scGPT human-pancreas annotation
-11. Synthetic smoke tutorial
-
-## Researcher shortcut
-
-Use this shorter route if your main question is how to adapt and fine-tune on a labeled dataset:
-
-1. Scanpy PBMC quickstart
-2. Experimental scGPT cell-type annotation
-3. Experimental scGPT dataset-specific annotation
-4. Experimental scGPT human-pancreas annotation
+1. [Experimental scGPT human-pancreas annotation](/_tutorials/scgpt_human_pancreas_annotation)
+2. [Experimental scGPT dataset-specific annotation](/_tutorials/scgpt_dataset_specific_annotation)
+3. [Experimental scGPT cell-type annotation](/_tutorials/scgpt_cell_type_annotation)
 
 ```{toctree}
 :hidden:
@@ -247,8 +164,8 @@ Use this shorter route if your main question is how to adapt and fine-tune on a 
 /_tutorials/scanpy_pbmc_quickstart
 /_tutorials/downstream_scanpy_after_scdlkit
 /_tutorials/pbmc_model_comparison
-/_tutorials/reconstruction_sanity_pbmc
 /_tutorials/pbmc_classification
+/_tutorials/reconstruction_sanity_pbmc
 /_tutorials/custom_model_extension
 /_tutorials/scgpt_pbmc_embeddings
 /_tutorials/scgpt_cell_type_annotation

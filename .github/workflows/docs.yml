@@ -180,6 +180,8 @@ jobs:
           python -c "from pathlib import Path; import shutil; root = Path('docs/_tutorials'); root.mkdir(parents=True, exist_ok=True); [shutil.copy2(path, root / path.name) for path in Path('downloaded-docs/classic').glob('*.ipynb')]; [shutil.copy2(path, root / path.name) for path in Path('downloaded-docs/foundation-embedding').glob('*.ipynb')]; [shutil.copy2(path, root / path.name) for path in Path('downloaded-docs/foundation-annotation').glob('*.ipynb')]; [shutil.copy2(path, root / path.name) for path in Path('downloaded-docs/pancreas-annotation').glob('*.ipynb')]"
       - name: Check docs feature contracts
         run: python scripts/check_feature_docs_contracts.py --check
+      - name: Check planning structure
+        run: python scripts/check_planning_structure.py --check
       - name: Build docs
         run: python -m sphinx -b html docs docs/_build/html -W --keep-going
       - uses: actions/upload-pages-artifact@v4
