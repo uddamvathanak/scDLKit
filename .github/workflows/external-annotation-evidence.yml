@@ -7,12 +7,18 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  PYTHONUNBUFFERED: "1"
   SCDLKIT_CACHE_DIR: ${{ github.workspace }}/.cache/scdlkit
+  OMP_NUM_THREADS: "2"
+  MKL_NUM_THREADS: "2"
+  OPENBLAS_NUM_THREADS: "2"
+  NUMBA_NUM_THREADS: "2"
+  TORCH_NUM_THREADS: "2"
 
 jobs:
   external-annotation-evidence:
     runs-on: ubuntu-latest
-    timeout-minutes: 150
+    timeout-minutes: 180
     permissions:
       contents: read
     steps:

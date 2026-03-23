@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import gc
 import json
 import shutil
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -37,6 +39,31 @@ _DISPLAY_NAMES = {
     "scgpt_lora": "scGPT LoRA tuning",
 }
 _STRATEGY_PROFILE = "ci"
+
+
+def _log(message: str) -> None:
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    print(f"[{timestamp}] {message}", flush=True)
+
+
+def _configure_runtime_limits() -> None:
+    try:
+        import torch
+    except ImportError:  # pragma: no cover - torch is installed in the workflow
+        return
+
+    torch.set_num_threads(2)
+    torch.set_num_interop_threads(1)
+
+
+def _clear_runtime_state() -> None:
+    gc.collect()
+    try:
+        import torch
+    except ImportError:  # pragma: no cover - torch is installed in the workflow
+        return
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
 
 def parse_args() -> argparse.Namespace:
@@ -210,6 +237,7 @@ def _collect_dataset_rows(
     dataset_name: str,
     output_root: Path,
 ) -> list[dict[str, Any]]:
+    _log(f"Loading dataset '{dataset_name}' with profile='full'.")
     adata, spec = _load_dataset(dataset_name, profile="full")
     rows = [
         run_foundation_annotation_pca_logistic(
@@ -222,7 +250,13 @@ def _collect_dataset_rows(
             profile=_STRATEGY_PROFILE,
         )
     ]
+    _log(
+        "Completed strategy "
+        f"'pca_logistic_annotation' for dataset '{dataset_name}'."
+    )
+    _clear_runtime_state()
     for model_name in ("scgpt_frozen_probe", "scgpt_head", "scgpt_lora"):
+        _log(f"Starting strategy '{model_name}' for dataset '{dataset_name}'.")
         rows.append(
             run_scgpt_annotation_strategy(
                 dataset_name=dataset_name,
@@ -235,10 +269,15 @@ def _collect_dataset_rows(
                 profile=_STRATEGY_PROFILE,
             )
         )
+        _log(f"Completed strategy '{model_name}' for dataset '{dataset_name}'.")
+        _clear_runtime_state()
+    del adata
+    _clear_runtime_state()
     return rows
 
 
 def run_external_annotation_evidence(*, output_dir: Path) -> dict[str, Path]:
+    _configure_runtime_limits()
     output_dir.mkdir(parents=True, exist_ok=True)
     benchmark_root = output_dir / "_strategy_runs"
     pancreas_root = output_dir / "pancreas"
@@ -248,12 +287,14 @@ def run_external_annotation_evidence(*, output_dir: Path) -> dict[str, Path]:
 
     all_rows: list[dict[str, Any]] = []
     for dataset_name in _DATASET_ORDER:
+        _log(f"Collecting benchmark rows for '{dataset_name}'.")
         all_rows.extend(
             _collect_dataset_rows(
                 dataset_name=dataset_name,
                 output_root=benchmark_root,
             )
         )
+        _log(f"Finished benchmark rows for '{dataset_name}'.")
     strategy_frame = _strategy_frame(all_rows)
 
     pancreas_frame = strategy_frame[
@@ -321,6 +362,7 @@ def run_external_annotation_evidence(*, output_dir: Path) -> dict[str, Path]:
         },
     }
     (output_dir / "summary.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    _log("External annotation evidence artifacts are ready.")
     return {
         "pancreas_dir": pancreas_root,
         "cross_dataset_dir": cross_dataset_root,
