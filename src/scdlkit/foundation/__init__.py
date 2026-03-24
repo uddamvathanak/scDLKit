@@ -37,6 +37,7 @@ from scdlkit.foundation.peft import (
     LoRAConfig,
     PEFTConfig,
     PrefixTuningConfig,
+    count_total_parameters,
     count_trainable_parameters,
 )
 from scdlkit.foundation.runner import (
@@ -44,7 +45,11 @@ from scdlkit.foundation.runner import (
     ScGPTAnnotationRunSummary,
     adapt_scgpt_annotation,
 )
-from scdlkit.foundation.scgpt import ScGPTEmbeddingModel, load_scgpt_model
+from scdlkit.foundation.scgpt import (
+    ScGPTEmbeddingModel,
+    load_scgpt_checkpoint_state_dict,
+    load_scgpt_model,
+)
 
 __all__ = [
     "ScGPTAnnotationDataReport",
@@ -68,8 +73,10 @@ __all__ = [
     "inspect_scgpt_annotation_data",
     "list_scgpt_checkpoints",
     "load_scgpt_annotation_model",
+    "load_scgpt_checkpoint_state_dict",
     "load_scgpt_model",
     "prepare_scgpt_data",
     "split_scgpt_data",
+    "count_total_parameters",
     "count_trainable_parameters",
 ]

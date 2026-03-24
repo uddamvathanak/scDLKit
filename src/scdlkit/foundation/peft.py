@@ -225,6 +225,12 @@ def count_trainable_parameters(model: torch.nn.Module) -> int:
     )
 
 
+def count_total_parameters(model: torch.nn.Module) -> int:
+    """Count all parameters of a module (trainable and frozen)."""
+
+    return int(sum(parameter.numel() for parameter in model.parameters()))
+
+
 __all__ = [
     "AdapterConfig",
     "AnnotationStrategy",
@@ -234,6 +240,7 @@ __all__ = [
     "PEFT_STRATEGIES",
     "PrefixTuningConfig",
     "TRAINABLE_ANNOTATION_STRATEGIES",
+    "count_total_parameters",
     "count_trainable_parameters",
     "default_strategy_config",
     "deserialize_peft_config",

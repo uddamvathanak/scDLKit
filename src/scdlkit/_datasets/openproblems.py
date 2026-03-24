@@ -13,6 +13,7 @@ from urllib.request import urlopen
 
 import numpy as np
 import pandas as pd
+import anndata as ad
 from anndata import AnnData, read_h5ad
 from scipy import sparse
 from sklearn.model_selection import train_test_split
@@ -122,6 +123,15 @@ def _processed_metadata_path(
 def _write_json(path: Path, payload: dict[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def _write_h5ad_with_nullable_strings(adata: AnnData, path: Path) -> None:
+    previous = ad.settings.allow_write_nullable_strings
+    ad.settings.allow_write_nullable_strings = True
+    try:
+        adata.write_h5ad(path)
+    finally:
+        ad.settings.allow_write_nullable_strings = previous
 
 
 def _download_file(url: str, destination: Path) -> None:
@@ -296,6 +306,25 @@ def _column_variances(matrix: sparse.spmatrix | np.ndarray) -> np.ndarray:
     return np.var(np.asarray(matrix, dtype=np.float32), axis=0)
 
 
+def _coerce_nullable_strings_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    coerced = frame.copy()
+    if isinstance(coerced.index.array, pd.arrays.StringArray):
+        coerced.index = pd.Index(
+            coerced.index.astype(str).to_numpy(dtype=object),
+            name=coerced.index.name,
+            dtype=object,
+        )
+    for column in coerced.columns:
+        series = coerced[column]
+        if isinstance(series.array, pd.arrays.StringArray):
+            coerced[column] = pd.Series(
+                series.astype(str).to_numpy(dtype=object),
+                index=coerced.index,
+                dtype=object,
+            )
+    return coerced
+
+
 def _top_cell_types(obs: pd.DataFrame, label_key: str, *, top_k: int) -> list[str]:
     counts = obs[label_key].astype(str).value_counts(sort=True)
     ordered = (
@@ -355,15 +384,27 @@ def _canonicalize_subset(subset: AnnData) -> AnnData:
         x_matrix = np.asarray(counts, dtype=np.float32).copy()
     var = subset.var.copy()
     feature_names = var["feature_name"].astype(str)
+    var["feature_name"] = feature_names.to_numpy(dtype=object)
     if "feature_id" not in var.columns:
-        var["feature_id"] = subset.var_names.astype(str)
-    canonical = AnnData(X=x_matrix, obs=subset.obs.copy(), var=var)
+        var["feature_id"] = subset.var_names.astype(str).to_numpy(dtype=object)
+    else:
+        var["feature_id"] = var["feature_id"].astype(str).to_numpy(dtype=object)
+    obs = subset.obs.copy()
+    obs["cell_type"] = obs["cell_type"].astype(str).to_numpy(dtype=object)
+    if "batch" in obs.columns:
+        obs["batch"] = obs["batch"].astype(str).to_numpy(dtype=object)
+    canonical = AnnData(
+        X=x_matrix,
+        obs=_coerce_nullable_strings_frame(obs),
+        var=_coerce_nullable_strings_frame(var),
+    )
     if sparse.issparse(x_matrix):
         canonical.layers["counts"] = x_matrix.copy()
     else:
         canonical.layers["counts"] = np.asarray(x_matrix).copy()
-    canonical.var_names = feature_names
+    canonical.var_names = pd.Index(feature_names.to_numpy(dtype=object), dtype=object)
     canonical.var_names_make_unique()
+    canonical.var = _coerce_nullable_strings_frame(canonical.var)
     canonical.raw = canonical.copy()
     return canonical
 
@@ -520,6 +561,6 @@ def load_openproblems_pancreas_annotation_dataset(
         cache_dir=cache_dir,
     )
     processed_path.parent.mkdir(parents=True, exist_ok=True)
-    processed.write_h5ad(processed_path)
+    _write_h5ad_with_nullable_strings(processed, processed_path)
     _write_json(metadata_path, metadata)
     return processed

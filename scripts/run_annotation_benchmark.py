@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from time import perf_counter
 from typing import Any
@@ -34,6 +34,7 @@ from run_quality_suite import (  # noqa: E402
     _batch_metrics_frame,
     _foundation_annotation_profile,
     _load_dataset,
+    _prepare_annotation_benchmark_adata,
     _process_peak_memory_mb,
     _save_confusion_plot,
     _save_scanpy_umap,
@@ -53,11 +54,14 @@ from scdlkit.foundation import (  # noqa: E402
     IA3Config,
     LoRAConfig,
     PrefixTuningConfig,
+    count_total_parameters,
     count_trainable_parameters,
     load_scgpt_annotation_model,
+    load_scgpt_checkpoint_state_dict,
     load_scgpt_model,
     prepare_scgpt_data,
 )
+from scdlkit.foundation.data import ScGPTPreparedData  # noqa: E402
 from scdlkit.training import Trainer  # noqa: E402
 
 BENCHMARK_MODELS: tuple[str, ...] = (
@@ -158,13 +162,27 @@ def parse_args() -> argparse.Namespace:
         ),
         help="Override the default cross-study folds by name.",
     )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Reuse completed per-run rows already present under the output directory.",
+    )
+    parser.add_argument(
+        "--aggregate-only",
+        action="store_true",
+        help="Skip execution and rebuild the top-level bundle from existing per-run rows.",
+    )
     return parser.parse_args()
 
 
 def _benchmark_profile(profile: str) -> tuple[str, dict[str, int]]:
     if profile == "quickstart":
-        return "quickstart", _foundation_annotation_profile("ci")
-    return "full", _foundation_annotation_profile("full")
+        settings = dict(_foundation_annotation_profile("ci"))
+        settings["token_max_length"] = 192
+        return "quickstart", settings
+    settings = dict(_foundation_annotation_profile("full"))
+    settings["token_max_length"] = 256
+    return "full", settings
 
 
 def _to_dense(matrix: Any) -> np.ndarray:
@@ -318,6 +336,27 @@ def _strategy_sort_value(model_name: str) -> int:
         return len(BENCHMARK_MODELS)
 
 
+def _expected_row_count(
+    *,
+    datasets: tuple[str, ...],
+    regimes: tuple[str, ...],
+    strategies: tuple[str, ...],
+    seeds: tuple[int, ...],
+    label_fractions: tuple[float, ...],
+    cross_study_folds: tuple[str, ...],
+) -> int:
+    total = 0
+    for dataset_name in datasets:
+        spec = ANNOTATION_DATASET_SPECS[dataset_name]
+        if "full_label" in regimes and "full_label" in spec.regimes:
+            total += len(seeds) * len(strategies)
+        if "low_label" in regimes and "low_label" in spec.regimes:
+            total += len(seeds) * len(label_fractions) * len(strategies)
+        if "cross_study" in regimes and "cross_study" in spec.regimes and spec.batch_key is not None:
+            total += len(cross_study_folds) * len(seeds) * len(strategies)
+    return total
+
+
 def _strategy_config_for_model(model_name: str) -> tuple[str, Any, float]:
     if model_name == "scgpt_head":
         return "head", None, 5e-3
@@ -354,8 +393,90 @@ def _run_output_dir(
     return path
 
 
+def _run_row_path(run_dir: Path) -> Path:
+    return run_dir / "row.json"
+
+
+def _jsonable_value(value: Any) -> Any:
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, (np.integer, np.floating)):
+        return value.item()
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    return value
+
+
+def _write_run_row(run_dir: Path, row: dict[str, Any]) -> None:
+    payload = {key: _jsonable_value(value) for key, value in row.items()}
+    _run_row_path(run_dir).write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def _load_run_row(run_dir: Path) -> dict[str, Any] | None:
+    row_path = _run_row_path(run_dir)
+    if not row_path.exists():
+        return None
+    payload = json.loads(row_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        return None
+    return payload
+
+
 def _subset_dataset(dataset: Dataset[dict[str, Any]], indices: np.ndarray) -> Subset[Any]:
     return Subset(dataset, [int(index) for index in np.asarray(indices, dtype=np.int64)])
+
+
+def _truncate_prepared_data(
+    prepared: ScGPTPreparedData,
+    *,
+    max_token_length: int,
+) -> ScGPTPreparedData:
+    dataset = prepared.dataset
+    gene_ids = getattr(dataset, "gene_ids", None)
+    values = getattr(dataset, "values", None)
+    padding_mask = getattr(dataset, "padding_mask", None)
+    labels = getattr(dataset, "labels", None)
+    if not isinstance(gene_ids, torch.Tensor):
+        return prepared
+    if int(gene_ids.shape[1]) <= max_token_length:
+        return prepared
+    if not isinstance(values, torch.Tensor) or not isinstance(padding_mask, torch.Tensor):
+        return prepared
+
+    class _TruncatedTensorDataset(Dataset[dict[str, torch.Tensor]]):
+        def __init__(
+            self,
+            *,
+            gene_ids: torch.Tensor,
+            values: torch.Tensor,
+            padding_mask: torch.Tensor,
+            labels: torch.Tensor | None,
+        ) -> None:
+            self.gene_ids = gene_ids
+            self.values = values
+            self.padding_mask = padding_mask
+            self.labels = labels
+
+        def __len__(self) -> int:
+            return int(self.gene_ids.shape[0])
+
+        def __getitem__(self, index: int) -> dict[str, torch.Tensor]:
+            sample: dict[str, torch.Tensor] = {
+                "gene_ids": self.gene_ids[index],
+                "values": self.values[index],
+                "padding_mask": self.padding_mask[index],
+            }
+            if self.labels is not None:
+                sample["y"] = self.labels[index]
+            return sample
+
+    truncated_dataset = _TruncatedTensorDataset(
+        gene_ids=gene_ids[:, :max_token_length].clone(),
+        values=values[:, :max_token_length].clone(),
+        padding_mask=padding_mask[:, :max_token_length].clone(),
+        labels=labels.clone() if isinstance(labels, torch.Tensor) else None,
+    )
+    return replace(prepared, dataset=truncated_dataset)
 
 
 def _checkpoint_size_bytes(best_model_artifact: str | None) -> int | None:
@@ -380,6 +501,7 @@ def _report_payload(
     model_name: str,
     metrics: dict[str, Any],
     trainable_parameters: int,
+    total_parameters: int,
     runtime_sec: float,
     checkpoint_size_bytes: int | None,
     split_plan: SplitPlan,
@@ -388,6 +510,7 @@ def _report_payload(
         "Dataset": dataset_name,
         "Strategy": MODEL_DISPLAY_NAMES[model_name],
         "Trainable parameters": trainable_parameters,
+        "Total parameters": total_parameters,
         "Runtime (sec)": runtime_sec,
         "Checkpoint size (bytes)": (
             checkpoint_size_bytes if checkpoint_size_bytes is not None else 0
@@ -453,6 +576,7 @@ def _run_pca_logistic_strategy(
                 **metrics,
                 **_batch_metric_summary(batch_metrics),
                 "trainable_parameters": 0,
+                "total_parameters": 0,
                 "checkpoint_size_bytes": 0,
             }
         ]
@@ -465,6 +589,7 @@ def _run_pca_logistic_strategy(
             model_name="pca_logistic_annotation",
             metrics=metrics,
             trainable_parameters=0,
+            total_parameters=0,
             runtime_sec=runtime_sec,
             checkpoint_size_bytes=0,
             split_plan=split_plan,
@@ -481,6 +606,7 @@ def _run_pca_logistic_strategy(
         "runtime_sec": runtime_sec,
         "peak_memory_mb": _process_peak_memory_mb(),
         "trainable_parameters": 0,
+        "total_parameters": 0,
         "checkpoint_size_bytes": 0,
         "artifact_dir": str(output_dir),
         "best_model_artifact": None,
@@ -495,6 +621,7 @@ def _run_pca_logistic_strategy(
 def _run_scgpt_strategy(
     *,
     adata: AnnData,
+    prepared: ScGPTPreparedData,
     label_key: str,
     batch_key: str | None,
     split_plan: SplitPlan,
@@ -503,15 +630,8 @@ def _run_scgpt_strategy(
     seed: int,
     profile_settings: dict[str, int],
     output_dir: Path,
+    preloaded_state_dict: dict | None = None,
 ) -> dict[str, Any]:
-    prepared = prepare_scgpt_data(
-        adata,
-        checkpoint="whole-human",
-        label_key=label_key,
-        batch_size=64,
-        use_raw=True,
-        min_gene_overlap=profile_settings["min_gene_overlap"],
-    )
     train_dataset = _subset_dataset(prepared.dataset, split_plan.train_indices)
     val_dataset = _subset_dataset(prepared.dataset, split_plan.val_indices)
     test_dataset = _subset_dataset(prepared.dataset, split_plan.test_indices)
@@ -520,13 +640,17 @@ def _run_scgpt_strategy(
 
     started_at = perf_counter()
     if model_name == "scgpt_frozen_probe":
-        model = load_scgpt_model("whole-human", device="auto")
+        model = load_scgpt_model(
+            "whole-human", device="auto", preloaded_state_dict=preloaded_state_dict
+        )
+        total_parameters = count_total_parameters(model)
         trainer = Trainer(
             model=model,
             task="representation",
             batch_size=prepared.batch_size,
             device="auto",
             epochs=1,
+            mixed_precision=torch.cuda.is_available(),
         )
         train_predictions = trainer.predict_dataset(train_dataset)
         test_predictions = trainer.predict_dataset(test_dataset)
@@ -562,7 +686,9 @@ def _run_scgpt_strategy(
             label_categories=prepared.label_categories,
             strategy_config=strategy_config,
             device="auto",
+            preloaded_state_dict=preloaded_state_dict,
         )
+        total_parameters = count_total_parameters(model)
         trainer = Trainer(
             model=model,
             task="classification",
@@ -570,6 +696,7 @@ def _run_scgpt_strategy(
             epochs=profile_settings[epoch_key],
             lr=lr,
             device="auto",
+            mixed_precision=torch.cuda.is_available(),
             early_stopping_patience=3,
             seed=seed,
         )
@@ -623,6 +750,7 @@ def _run_scgpt_strategy(
                 **metrics,
                 **_batch_metric_summary(batch_metrics),
                 "trainable_parameters": trainable_parameters,
+                "total_parameters": total_parameters,
                 "checkpoint_size_bytes": checkpoint_size_bytes,
             }
         ]
@@ -635,6 +763,7 @@ def _run_scgpt_strategy(
             model_name=model_name,
             metrics=metrics,
             trainable_parameters=trainable_parameters,
+            total_parameters=total_parameters,
             runtime_sec=runtime_sec,
             checkpoint_size_bytes=checkpoint_size_bytes,
             split_plan=split_plan,
@@ -651,6 +780,7 @@ def _run_scgpt_strategy(
         "runtime_sec": runtime_sec,
         "peak_memory_mb": _process_peak_memory_mb(),
         "trainable_parameters": trainable_parameters,
+        "total_parameters": total_parameters,
         "checkpoint_size_bytes": checkpoint_size_bytes,
         "artifact_dir": str(output_dir),
         "best_model_artifact": best_model_artifact,
@@ -666,6 +796,7 @@ def _run_single_benchmark(
     *,
     dataset_name: str,
     adata: AnnData,
+    prepared: ScGPTPreparedData | None,
     label_key: str,
     batch_key: str | None,
     regime: str,
@@ -674,6 +805,8 @@ def _run_single_benchmark(
     seed: int,
     profile_settings: dict[str, int],
     output_dir: Path,
+    resume: bool,
+    preloaded_state_dict: dict | None = None,
 ) -> dict[str, Any]:
     run_dir = _run_output_dir(
         output_dir,
@@ -684,6 +817,10 @@ def _run_single_benchmark(
         label_fraction=split_plan.label_fraction,
         cross_study_fold=split_plan.cross_study_fold,
     )
+    if resume:
+        existing_row = _load_run_row(run_dir)
+        if existing_row is not None:
+            return existing_row
     if model_name == "pca_logistic_annotation":
         row = _run_pca_logistic_strategy(
             adata=adata,
@@ -695,8 +832,22 @@ def _run_single_benchmark(
             output_dir=run_dir,
         )
     else:
+        if prepared is None:
+            prepared = prepare_scgpt_data(
+                adata,
+                checkpoint="whole-human",
+                label_key=label_key,
+                batch_size=64,
+                use_raw=True,
+                min_gene_overlap=profile_settings["min_gene_overlap"],
+            )
+            prepared = _truncate_prepared_data(
+                prepared,
+                max_token_length=profile_settings["token_max_length"],
+            )
         row = _run_scgpt_strategy(
             adata=adata,
+            prepared=prepared,
             label_key=label_key,
             batch_key=batch_key,
             split_plan=split_plan,
@@ -705,30 +856,81 @@ def _run_single_benchmark(
             seed=seed,
             profile_settings=profile_settings,
             output_dir=run_dir,
+            preloaded_state_dict=preloaded_state_dict,
         )
     row["regime"] = regime
+    _write_run_row(run_dir, row)
     return row
+
+
+def _prepare_scgpt_data_for_seed(
+    dataset_name: str,
+    benchmark_adata: AnnData,
+    *,
+    label_key: str,
+    profile_settings: dict[str, int],
+    pancreas_prepared: ScGPTPreparedData | None,
+) -> ScGPTPreparedData | None:
+    """Return prepared scGPT data for a single seed's adata, computing it once if needed."""
+    if dataset_name == "openproblems_human_pancreas":
+        return pancreas_prepared
+    seed_prepared = prepare_scgpt_data(
+        benchmark_adata,
+        checkpoint="whole-human",
+        label_key=label_key,
+        batch_size=64,
+        use_raw=True,
+        min_gene_overlap=profile_settings["min_gene_overlap"],
+    )
+    return _truncate_prepared_data(
+        seed_prepared,
+        max_token_length=profile_settings["token_max_length"],
+    )
 
 
 def _collect_full_label_rows(
     *,
     dataset_name: str,
     adata: AnnData,
+    prepared: ScGPTPreparedData | None,
     label_key: str,
     batch_key: str | None,
     seeds: tuple[int, ...],
     strategies: tuple[str, ...],
     output_dir: Path,
     profile_settings: dict[str, int],
+    profile: str,
+    resume: bool,
+    preloaded_state_dict: dict | None = None,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
+    scgpt_strategies = [s for s in strategies if s != "pca_logistic_annotation"]
     for seed in seeds:
-        split_plan = build_full_label_split(adata, label_key=label_key, seed=seed)
+        benchmark_adata = _prepare_annotation_benchmark_adata(
+            dataset_name,
+            adata,
+            label_key=label_key,
+            seed=seed,
+            profile=profile,
+        )
+        benchmark_prepared = (
+            _prepare_scgpt_data_for_seed(
+                dataset_name,
+                benchmark_adata,
+                label_key=label_key,
+                profile_settings=profile_settings,
+                pancreas_prepared=prepared,
+            )
+            if scgpt_strategies
+            else None
+        )
+        split_plan = build_full_label_split(benchmark_adata, label_key=label_key, seed=seed)
         for model_name in strategies:
             rows.append(
                 _run_single_benchmark(
                     dataset_name=dataset_name,
-                    adata=adata,
+                    adata=benchmark_adata,
+                    prepared=benchmark_prepared,
                     label_key=label_key,
                     batch_key=batch_key,
                     regime="full_label",
@@ -737,6 +939,8 @@ def _collect_full_label_rows(
                     seed=seed,
                     profile_settings=profile_settings,
                     output_dir=output_dir,
+                    resume=resume,
+                    preloaded_state_dict=preloaded_state_dict,
                 )
             )
     return rows
@@ -746,6 +950,7 @@ def _collect_low_label_rows(
     *,
     dataset_name: str,
     adata: AnnData,
+    prepared: ScGPTPreparedData | None,
     label_key: str,
     batch_key: str | None,
     seeds: tuple[int, ...],
@@ -753,14 +958,36 @@ def _collect_low_label_rows(
     strategies: tuple[str, ...],
     output_dir: Path,
     profile_settings: dict[str, int],
+    profile: str,
+    resume: bool,
+    preloaded_state_dict: dict | None = None,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
+    scgpt_strategies = [s for s in strategies if s != "pca_logistic_annotation"]
     for seed in seeds:
-        full_split = build_full_label_split(adata, label_key=label_key, seed=seed)
+        benchmark_adata = _prepare_annotation_benchmark_adata(
+            dataset_name,
+            adata,
+            label_key=label_key,
+            seed=seed,
+            profile=profile,
+        )
+        benchmark_prepared = (
+            _prepare_scgpt_data_for_seed(
+                dataset_name,
+                benchmark_adata,
+                label_key=label_key,
+                profile_settings=profile_settings,
+                pancreas_prepared=prepared,
+            )
+            if scgpt_strategies
+            else None
+        )
+        full_split = build_full_label_split(benchmark_adata, label_key=label_key, seed=seed)
         for label_fraction in label_fractions:
             split_plan = build_low_label_split(
                 full_split,
-                adata,
+                benchmark_adata,
                 label_key=label_key,
                 label_fraction=label_fraction,
                 seed=seed,
@@ -769,7 +996,8 @@ def _collect_low_label_rows(
                 rows.append(
                     _run_single_benchmark(
                         dataset_name=dataset_name,
-                        adata=adata,
+                        adata=benchmark_adata,
+                        prepared=benchmark_prepared,
                         label_key=label_key,
                         batch_key=batch_key,
                         regime="low_label",
@@ -778,6 +1006,8 @@ def _collect_low_label_rows(
                         seed=seed,
                         profile_settings=profile_settings,
                         output_dir=output_dir,
+                        resume=resume,
+                        preloaded_state_dict=preloaded_state_dict,
                     )
                 )
     return rows
@@ -787,6 +1017,7 @@ def _collect_cross_study_rows(
     *,
     dataset_name: str,
     adata: AnnData,
+    prepared: ScGPTPreparedData | None,
     label_key: str,
     batch_key: str,
     seeds: tuple[int, ...],
@@ -794,6 +1025,8 @@ def _collect_cross_study_rows(
     strategies: tuple[str, ...],
     output_dir: Path,
     profile_settings: dict[str, int],
+    resume: bool,
+    preloaded_state_dict: dict | None = None,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     available_folds = {
@@ -814,6 +1047,7 @@ def _collect_cross_study_rows(
                     _run_single_benchmark(
                         dataset_name=dataset_name,
                         adata=adata,
+                        prepared=prepared,
                         label_key=label_key,
                         batch_key=batch_key,
                         regime="cross_study",
@@ -822,8 +1056,22 @@ def _collect_cross_study_rows(
                         seed=seed,
                         profile_settings=profile_settings,
                         output_dir=output_dir,
+                        resume=resume,
+                        preloaded_state_dict=preloaded_state_dict,
                     )
                 )
+    return rows
+
+
+def _collect_existing_rows(output_dir: Path) -> list[dict[str, Any]]:
+    runs_root = output_dir / "runs"
+    if not runs_root.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    for row_path in sorted(runs_root.rglob("row.json")):
+        payload = json.loads(row_path.read_text(encoding="utf-8"))
+        if isinstance(payload, dict):
+            rows.append(payload)
     return rows
 
 
@@ -891,7 +1139,8 @@ def _save_performance_figure(frame: pd.DataFrame, output_dir: Path) -> pd.DataFr
             axis.set_xticklabels(dataset_frame["strategy"], rotation=35, ha="right")
             axis.legend(frameon=False)
     figure.tight_layout()
-    figure.savefig(output_dir / "annotation_performance.png", dpi=150, bbox_inches="tight")
+    figure.savefig(output_dir / "annotation_performance.png", dpi=300, bbox_inches="tight")
+    figure.savefig(output_dir / "annotation_performance.svg", bbox_inches="tight")
     plt.close(figure)
     return summary
 
@@ -954,7 +1203,8 @@ def _save_low_label_figure(frame: pd.DataFrame, output_dir: Path) -> pd.DataFram
             axis.set_ylim(0.0, 1.0)
             axis.legend(frameon=False, fontsize=8)
     figure.tight_layout()
-    figure.savefig(output_dir / "annotation_low_label_curves.png", dpi=150, bbox_inches="tight")
+    figure.savefig(output_dir / "annotation_low_label_curves.png", dpi=300, bbox_inches="tight")
+    figure.savefig(output_dir / "annotation_low_label_curves.svg", bbox_inches="tight")
     plt.close(figure)
     return summary
 
@@ -1012,7 +1262,8 @@ def _save_cross_study_figure(frame: pd.DataFrame, output_dir: Path) -> pd.DataFr
             axis.set_xticklabels(fold_frame["strategy"], rotation=35, ha="right")
             axis.legend(frameon=False, fontsize=8)
     figure.tight_layout()
-    figure.savefig(output_dir / "annotation_cross_study.png", dpi=150, bbox_inches="tight")
+    figure.savefig(output_dir / "annotation_cross_study.png", dpi=300, bbox_inches="tight")
+    figure.savefig(output_dir / "annotation_cross_study.svg", bbox_inches="tight")
     plt.close(figure)
     return summary
 
@@ -1073,7 +1324,8 @@ def _save_pareto_figure(frame: pd.DataFrame, output_dir: Path) -> pd.DataFrame:
         axes[0].legend(frameon=False)
         axes[1].legend(frameon=False)
     figure.tight_layout()
-    figure.savefig(output_dir / "annotation_pareto.png", dpi=150, bbox_inches="tight")
+    figure.savefig(output_dir / "annotation_pareto.png", dpi=300, bbox_inches="tight")
+    figure.savefig(output_dir / "annotation_pareto.svg", bbox_inches="tight")
     plt.close(figure)
     return summary
 
@@ -1092,6 +1344,8 @@ def _write_summary(
     low_label_frame: pd.DataFrame,
     cross_study_frame: pd.DataFrame,
     output_dir: Path,
+    completed_rows: int,
+    expected_rows: int,
 ) -> dict[str, Any]:
     full_bests: dict[str, dict[str, Any]] = {}
     if not full_label_frame.empty:
@@ -1121,6 +1375,9 @@ def _write_summary(
         "full_label_rows": int(len(full_label_frame)),
         "low_label_rows": int(len(low_label_frame)),
         "cross_study_rows": int(len(cross_study_frame)),
+        "completed_rows": int(completed_rows),
+        "expected_rows": int(expected_rows),
+        "complete": bool(completed_rows >= expected_rows),
         "best_full_label_by_dataset": full_bests,
     }
     (output_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
@@ -1131,6 +1388,8 @@ def _write_summary(
         f"- Full-label rows: `{summary['full_label_rows']}`",
         f"- Low-label rows: `{summary['low_label_rows']}`",
         f"- Cross-study rows: `{summary['cross_study_rows']}`",
+        f"- Completed rows: `{summary['completed_rows']}` / `{summary['expected_rows']}`",
+        f"- Complete bundle: `{summary['complete']}`",
         "",
         "## Best full-label strategies",
         "",
@@ -1194,64 +1453,101 @@ def run_annotation_benchmark(
     seeds: tuple[int, ...],
     label_fractions: tuple[float, ...],
     cross_study_folds: tuple[str, ...],
+    resume: bool = False,
+    aggregate_only: bool = False,
 ) -> dict[str, Path]:
     dataset_profile, profile_settings = _benchmark_profile(profile)
     output_dir.mkdir(parents=True, exist_ok=True)
     rows: list[dict[str, Any]] = []
 
-    for dataset_name in datasets:
-        dataset_spec = ANNOTATION_DATASET_SPECS[dataset_name]
-        adata, label_key, batch_key = _load_annotation_dataset(
-            dataset_name,
-            profile=dataset_profile,
-        )
-        if "full_label" in regimes and "full_label" in dataset_spec.regimes:
-            rows.extend(
-                _collect_full_label_rows(
-                    dataset_name=dataset_name,
-                    adata=adata,
-                    label_key=label_key,
-                    batch_key=batch_key,
-                    seeds=seeds,
-                    strategies=strategies,
-                    output_dir=output_dir,
-                    profile_settings=profile_settings,
-                )
-            )
-        if "low_label" in regimes and "low_label" in dataset_spec.regimes:
-            rows.extend(
-                _collect_low_label_rows(
-                    dataset_name=dataset_name,
-                    adata=adata,
-                    label_key=label_key,
-                    batch_key=batch_key,
-                    seeds=seeds,
-                    label_fractions=label_fractions,
-                    strategies=strategies,
-                    output_dir=output_dir,
-                    profile_settings=profile_settings,
-                )
-            )
-        if (
-            "cross_study" in regimes
-            and "cross_study" in dataset_spec.regimes
-            and batch_key is not None
-        ):
-            rows.extend(
-                _collect_cross_study_rows(
-                    dataset_name=dataset_name,
-                    adata=adata,
-                    label_key=label_key,
-                    batch_key=batch_key,
-                    seeds=seeds,
-                    fold_names=cross_study_folds,
-                    strategies=strategies,
-                    output_dir=output_dir,
-                    profile_settings=profile_settings,
-                )
-            )
+    # Pre-load the scGPT checkpoint weights once for the entire benchmark run.
+    # All strategy model loads reuse this in-memory dict instead of re-reading
+    # the checkpoint file from disk for every run.
+    scgpt_strategies = [s for s in strategies if s != "pca_logistic_annotation"]
+    preloaded_state_dict: dict | None = None
+    if scgpt_strategies and not aggregate_only:
+        preloaded_state_dict = load_scgpt_checkpoint_state_dict("whole-human")
 
-    frame = _ordered_frame(rows)
+    if not aggregate_only:
+        for dataset_name in datasets:
+            dataset_spec = ANNOTATION_DATASET_SPECS[dataset_name]
+            adata, label_key, batch_key = _load_annotation_dataset(
+                dataset_name,
+                profile=dataset_profile,
+            )
+            prepared: ScGPTPreparedData | None = None
+            if dataset_name == "openproblems_human_pancreas" and scgpt_strategies:
+                prepared = prepare_scgpt_data(
+                    adata,
+                    checkpoint="whole-human",
+                    label_key=label_key,
+                    batch_size=64,
+                    use_raw=True,
+                    min_gene_overlap=profile_settings["min_gene_overlap"],
+                )
+                prepared = _truncate_prepared_data(
+                    prepared,
+                    max_token_length=profile_settings["token_max_length"],
+                )
+            if "full_label" in regimes and "full_label" in dataset_spec.regimes:
+                rows.extend(
+                    _collect_full_label_rows(
+                        dataset_name=dataset_name,
+                        adata=adata,
+                        prepared=prepared,
+                        label_key=label_key,
+                        batch_key=batch_key,
+                        seeds=seeds,
+                        strategies=strategies,
+                        output_dir=output_dir,
+                        profile_settings=profile_settings,
+                        profile=dataset_profile,
+                        resume=resume,
+                        preloaded_state_dict=preloaded_state_dict,
+                    )
+                )
+            if "low_label" in regimes and "low_label" in dataset_spec.regimes:
+                rows.extend(
+                    _collect_low_label_rows(
+                        dataset_name=dataset_name,
+                        adata=adata,
+                        prepared=prepared,
+                        label_key=label_key,
+                        batch_key=batch_key,
+                        seeds=seeds,
+                        label_fractions=label_fractions,
+                        strategies=strategies,
+                        output_dir=output_dir,
+                        profile_settings=profile_settings,
+                        profile=dataset_profile,
+                        resume=resume,
+                        preloaded_state_dict=preloaded_state_dict,
+                    )
+                )
+            if (
+                "cross_study" in regimes
+                and "cross_study" in dataset_spec.regimes
+                and batch_key is not None
+            ):
+                rows.extend(
+                    _collect_cross_study_rows(
+                        dataset_name=dataset_name,
+                        adata=adata,
+                        prepared=prepared,
+                        label_key=label_key,
+                        batch_key=batch_key,
+                        seeds=seeds,
+                        fold_names=cross_study_folds,
+                        strategies=strategies,
+                        output_dir=output_dir,
+                        profile_settings=profile_settings,
+                        resume=resume,
+                        preloaded_state_dict=preloaded_state_dict,
+                    )
+                )
+
+    existing_rows = _collect_existing_rows(output_dir)
+    frame = _ordered_frame(existing_rows)
     if frame.empty:
         full_label_frame = pd.DataFrame()
         low_label_frame = pd.DataFrame()
@@ -1282,6 +1578,15 @@ def run_annotation_benchmark(
         low_label_frame=low_label_frame,
         cross_study_frame=cross_study_frame,
         output_dir=output_dir,
+        completed_rows=len(existing_rows),
+        expected_rows=_expected_row_count(
+            datasets=datasets,
+            regimes=regimes,
+            strategies=strategies,
+            seeds=seeds,
+            label_fractions=label_fractions,
+            cross_study_folds=cross_study_folds,
+        ),
     )
     _sync_tutorial_bundle(output_dir)
     return {
@@ -1305,6 +1610,8 @@ def main() -> None:
         seeds=tuple(int(seed) for seed in args.seeds),
         label_fractions=tuple(float(value) for value in args.label_fractions),
         cross_study_folds=tuple(str(value) for value in args.cross_study_folds),
+        resume=bool(args.resume),
+        aggregate_only=bool(args.aggregate_only),
     )
     print(json.dumps({key: str(value) for key, value in outputs.items()}, indent=2))
 

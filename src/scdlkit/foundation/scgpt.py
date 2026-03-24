@@ -202,19 +202,48 @@ def _build_scgpt_backbone(config: dict[str, Any], vocab: GeneVocab) -> ScGPTBack
     )
 
 
-def _load_scgpt_backbone(
+def load_scgpt_checkpoint_state_dict(
     checkpoint: str = DEFAULT_SCGPT_CHECKPOINT,
     *,
     cache_dir: str | Path | None = None,
-) -> tuple[ScGPTBackbone, dict[str, Any], GeneVocab]:
-    checkpoint_dir, config, vocab = _load_scgpt_assets(checkpoint, cache_dir=cache_dir)
-    backbone = _build_scgpt_backbone(config, vocab)
+) -> dict[str, Any]:
+    """Load the scGPT checkpoint weights into a CPU state dict.
+
+    Pre-loading and passing this dict to :func:`load_scgpt_model` and
+    :func:`load_scgpt_annotation_model` via ``preloaded_state_dict`` avoids
+    re-reading the checkpoint file from disk for every strategy in a benchmark
+    loop.
+    """
+
+    checkpoint_dir = ensure_scgpt_checkpoint(checkpoint, cache_dir=cache_dir)
     state_dict = torch.load(checkpoint_dir / "best_model.pt", map_location="cpu")
     if isinstance(state_dict, dict):
         if "model_state_dict" in state_dict and isinstance(state_dict["model_state_dict"], dict):
             state_dict = state_dict["model_state_dict"]
         elif "state_dict" in state_dict and isinstance(state_dict["state_dict"], dict):
             state_dict = state_dict["state_dict"]
+    return state_dict
+
+
+def _load_scgpt_backbone(
+    checkpoint: str = DEFAULT_SCGPT_CHECKPOINT,
+    *,
+    cache_dir: str | Path | None = None,
+    preloaded_state_dict: dict[str, Any] | None = None,
+) -> tuple[ScGPTBackbone, dict[str, Any], GeneVocab]:
+    checkpoint_dir, config, vocab = _load_scgpt_assets(checkpoint, cache_dir=cache_dir)
+    backbone = _build_scgpt_backbone(config, vocab)
+    if preloaded_state_dict is not None:
+        state_dict = preloaded_state_dict
+    else:
+        state_dict = torch.load(checkpoint_dir / "best_model.pt", map_location="cpu")
+        if isinstance(state_dict, dict):
+            if "model_state_dict" in state_dict and isinstance(
+                state_dict["model_state_dict"], dict
+            ):
+                state_dict = state_dict["model_state_dict"]
+            elif "state_dict" in state_dict and isinstance(state_dict["state_dict"], dict):
+                state_dict = state_dict["state_dict"]
     _load_pretrained_weights(backbone, state_dict)
     backbone.eval()
     return backbone, config, vocab
@@ -225,10 +254,22 @@ def load_scgpt_model(
     *,
     device: str = "auto",
     cache_dir: str | Path | None = None,
+    preloaded_state_dict: dict[str, Any] | None = None,
 ) -> ScGPTEmbeddingModel:
-    """Load a frozen scGPT checkpoint for embedding extraction."""
+    """Load a frozen scGPT checkpoint for embedding extraction.
 
-    model, _, _ = _load_scgpt_backbone(checkpoint, cache_dir=cache_dir)
+    Parameters
+    ----------
+    preloaded_state_dict
+        Optional pre-loaded checkpoint weights (from
+        :func:`load_scgpt_checkpoint_state_dict`).  When provided, the
+        checkpoint file is not re-read from disk.  Use this when calling
+        :func:`load_scgpt_model` repeatedly inside a benchmark loop.
+    """
+
+    model, _, _ = _load_scgpt_backbone(
+        checkpoint, cache_dir=cache_dir, preloaded_state_dict=preloaded_state_dict
+    )
     resolved_device = resolve_device(device)
     if resolved_device.type != "cuda":
         warnings.filterwarnings(

@@ -225,11 +225,16 @@ class Trainer:
         with torch.inference_mode():
             for batch in loader:
                 device_batch = self._to_device(batch)
-                predict_batch = getattr(self.model, "predict_batch", None)
-                if callable(predict_batch):
-                    outputs = predict_batch(device_batch)
-                else:
-                    outputs = self.model(device_batch["x"])
+                context = torch.autocast(
+                    device_type=self.device.type,
+                    enabled=self.mixed_precision,
+                )
+                with context:
+                    predict_batch = getattr(self.model, "predict_batch", None)
+                    if callable(predict_batch):
+                        outputs = predict_batch(device_batch)
+                    else:
+                        outputs = self.model(device_batch["x"])
                 for key, value in outputs.items():
                     predictions.setdefault(key, []).append(value.detach().cpu())
                 if "x" in device_batch:

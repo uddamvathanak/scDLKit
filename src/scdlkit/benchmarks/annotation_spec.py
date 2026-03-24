@@ -97,6 +97,7 @@ ANNOTATION_TASK_SPEC = AnnotationTaskSpec(
     efficiency_metrics=(
         "runtime_sec",
         "trainable_parameters",
+        "total_parameters",
         "peak_memory_mb",
         "checkpoint_size_bytes",
     ),

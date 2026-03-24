@@ -221,6 +221,7 @@ def load_scgpt_annotation_model(
     classifier_dropout: float = 0.1,
     device: str = "auto",
     cache_dir: str | Path | None = None,
+    preloaded_state_dict: dict | None = None,
 ) -> ScGPTAnnotationModel:
     """Load an experimental scGPT annotation model for ``Trainer``.
 
@@ -263,7 +264,9 @@ def load_scgpt_annotation_model(
         strategy_config=strategy_config,
         lora_config=lora_config,
     )
-    backbone, _, _ = _load_scgpt_backbone(checkpoint, cache_dir=cache_dir)
+    backbone, _, _ = _load_scgpt_backbone(
+        checkpoint, cache_dir=cache_dir, preloaded_state_dict=preloaded_state_dict
+    )
     resolved_strategy_config = _apply_tuning_strategy(
         backbone,
         tuning_strategy=tuning_strategy,
