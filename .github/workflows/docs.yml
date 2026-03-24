@@ -178,6 +178,8 @@ jobs:
       - name: Combine prepared tutorial notebooks
         run: |
           python -c "from pathlib import Path; import shutil; root = Path('docs/_tutorials'); root.mkdir(parents=True, exist_ok=True); [shutil.copy2(path, root / path.name) for path in Path('downloaded-docs/classic').glob('*.ipynb')]; [shutil.copy2(path, root / path.name) for path in Path('downloaded-docs/foundation-embedding').glob('*.ipynb')]; [shutil.copy2(path, root / path.name) for path in Path('downloaded-docs/foundation-annotation').glob('*.ipynb')]; [shutil.copy2(path, root / path.name) for path in Path('downloaded-docs/pancreas-annotation').glob('*.ipynb')]"
+      - name: Render tutorial execution status page
+        run: python scripts/render_tutorial_status.py --check
       - name: Check docs feature contracts
         run: python scripts/check_feature_docs_contracts.py --check
       - name: Check planning structure

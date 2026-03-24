@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Sized
+from collections.abc import Mapping, Sized
 from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
@@ -27,14 +27,46 @@ from scdlkit.foundation.data import (
     split_scgpt_data,
 )
 from scdlkit.foundation.lora import ScGPTLoRAConfig
+from scdlkit.foundation.peft import (
+    AnnotationStrategy,
+    LoRAConfig,
+    PEFTConfig,
+    count_trainable_parameters,
+    deserialize_strategy_configs,
+    resolve_strategy_configs,
+    serialize_strategy_configs,
+)
 from scdlkit.foundation.scgpt import ScGPTEmbeddingModel, load_scgpt_model
 from scdlkit.training import Trainer
 from scdlkit.visualization.classification import plot_confusion_matrix
 
-_ALLOWED_STRATEGIES = ("frozen_probe", "head", "lora")
-_DEFAULT_STRATEGIES = ("frozen_probe", "head")
-_HEAD_EPOCHS = 3
-_LORA_EPOCHS = 2
+_ALLOWED_STRATEGIES = (
+    "frozen_probe",
+    "head",
+    "full_finetune",
+    "lora",
+    "adapter",
+    "prefix_tuning",
+    "ia3",
+)
+_ALLOWED_STRATEGY_SET = {str(strategy) for strategy in _ALLOWED_STRATEGIES}
+_DEFAULT_STRATEGIES: tuple[AnnotationStrategy, ...] = ("frozen_probe", "head")
+_STRATEGY_EPOCHS: dict[str, int] = {
+    "head": 3,
+    "full_finetune": 2,
+    "lora": 2,
+    "adapter": 3,
+    "prefix_tuning": 3,
+    "ia3": 3,
+}
+_STRATEGY_LR: dict[str, float] = {
+    "head": 1e-3,
+    "full_finetune": 5e-4,
+    "lora": 1e-3,
+    "adapter": 1e-3,
+    "prefix_tuning": 1e-3,
+    "ia3": 1e-3,
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,7 +89,7 @@ class _FrozenProbeState:
 
 @dataclass(frozen=True, slots=True)
 class _StrategyResult:
-    strategy: str
+    strategy: AnnotationStrategy
     validation_metrics: dict[str, float]
     test_metrics: dict[str, float]
     runtime_sec: float
@@ -65,12 +97,6 @@ class _StrategyResult:
     predictions_test: dict[str, np.ndarray]
     model: ScGPTEmbeddingModel | ScGPTAnnotationModel | None
     probe_state: _FrozenProbeState | None
-
-
-def _count_trainable_parameters(model: torch.nn.Module) -> int:
-    return int(
-        sum(parameter.numel() for parameter in model.parameters() if parameter.requires_grad)
-    )
 
 
 def _softmax(logits: np.ndarray) -> np.ndarray:
@@ -145,6 +171,15 @@ def _markdown_table(frame: pd.DataFrame) -> str:
 def _default_min_gene_overlap(adata: AnnData) -> int:
     source = adata.raw.to_adata() if adata.raw is not None else adata
     return max(1, min(500, int(np.ceil(source.n_vars * 0.8))))
+
+
+def _classification_summary(metrics: Mapping[str, Any]) -> dict[str, float]:
+    summary: dict[str, float] = {}
+    for key in ("accuracy", "macro_f1", "balanced_accuracy", "auroc_ovr"):
+        value = metrics.get(key)
+        if isinstance(value, (float, int, np.floating, np.integer)):
+            summary[key] = float(value)
+    return summary
 
 
 def _evaluation_dataset(split: ScGPTSplitData) -> Any:
@@ -222,9 +257,12 @@ class ScGPTAnnotationRunner:
         ``"auto"``, ``"cpu"``, or ``"cuda"``.
     classifier_dropout
         Dropout applied in the annotation classifier head.
+    strategy_configs
+        Optional per-strategy PEFT configuration mapping for ``lora``,
+        ``adapter``, ``prefix_tuning``, and ``ia3``.
     lora_config
-        Optional LoRA configuration used when the strategy ladder includes
-        ``"lora"``.
+        Backward-compatible LoRA configuration alias. Use
+        ``strategy_configs={"lora": LoRAConfig(...)}`` for new code.
     output_dir
         Optional artifact directory for reports, plots, and saved state.
 
@@ -240,17 +278,18 @@ class ScGPTAnnotationRunner:
         *,
         label_key: str,
         checkpoint: str = DEFAULT_SCGPT_CHECKPOINT,
-        strategies: tuple[str, ...] = _DEFAULT_STRATEGIES,
+        strategies: tuple[AnnotationStrategy, ...] = _DEFAULT_STRATEGIES,
         batch_size: int = 64,
         val_size: float = 0.15,
         test_size: float = 0.15,
         random_state: int = 42,
         device: str = "auto",
         classifier_dropout: float = 0.1,
-        lora_config: ScGPTLoRAConfig | None = None,
+        strategy_configs: Mapping[str, PEFTConfig] | None = None,
+        lora_config: ScGPTLoRAConfig | LoRAConfig | None = None,
         output_dir: str | Path | None = None,
     ) -> None:
-        invalid = sorted(set(strategies) - set(_ALLOWED_STRATEGIES))
+        invalid = sorted({str(value) for value in strategies} - _ALLOWED_STRATEGY_SET)
         if invalid:
             msg = (
                 "Unsupported scGPT annotation strategies: "
@@ -259,18 +298,31 @@ class ScGPTAnnotationRunner:
             raise ValueError(msg)
         self.label_key = label_key
         self.checkpoint = checkpoint
-        self.strategies = strategies
+        self.strategies: tuple[AnnotationStrategy, ...] = tuple(strategies)
         self.batch_size = batch_size
         self.val_size = val_size
         self.test_size = test_size
         self.random_state = random_state
         self.device = device
         self.classifier_dropout = classifier_dropout
-        self.lora_config = lora_config
+        self.strategy_configs = resolve_strategy_configs(
+            strategies=tuple(str(value) for value in self.strategies),
+            strategy_configs=strategy_configs,
+            lora_config=LoRAConfig(
+                rank=lora_config.rank,
+                alpha=lora_config.alpha,
+                dropout=lora_config.dropout,
+                target_modules=tuple(lora_config.target_modules),
+            )
+            if lora_config is not None
+            else None,
+        )
+        resolved_lora = self.strategy_configs.get("lora")
+        self.lora_config = resolved_lora if isinstance(resolved_lora, LoRAConfig) else None
         self.output_dir = Path(output_dir) if output_dir is not None else None
         self.data_report_: ScGPTAnnotationDataReport | None = None
         self.summary_: ScGPTAnnotationRunSummary | None = None
-        self.best_strategy_: str | None = None
+        self.best_strategy_: AnnotationStrategy | None = None
         self.label_categories_: tuple[str, ...] | None = None
         self._best_model: ScGPTEmbeddingModel | ScGPTAnnotationModel | None = None
         self._best_probe_state: _FrozenProbeState | None = None
@@ -351,14 +403,8 @@ class ScGPTAnnotationRunner:
         runtime_sec = perf_counter() - started_at
         return _StrategyResult(
             strategy="frozen_probe",
-            validation_metrics={
-                "accuracy": float(validation_metrics["accuracy"]),
-                "macro_f1": float(validation_metrics["macro_f1"]),
-            },
-            test_metrics={
-                "accuracy": float(test_metrics["accuracy"]),
-                "macro_f1": float(test_metrics["macro_f1"]),
-            },
+            validation_metrics=_classification_summary(validation_metrics),
+            test_metrics=_classification_summary(test_metrics),
             runtime_sec=runtime_sec,
             trainable_parameters=0,
             predictions_test={
@@ -378,7 +424,7 @@ class ScGPTAnnotationRunner:
         self,
         *,
         split: ScGPTSplitData,
-        strategy: str,
+        strategy: AnnotationStrategy,
     ) -> _StrategyResult:
         started_at = perf_counter()
         model = load_scgpt_annotation_model(
@@ -386,7 +432,7 @@ class ScGPTAnnotationRunner:
             checkpoint=self.checkpoint,
             tuning_strategy=strategy,
             label_categories=self.label_categories_,
-            lora_config=self.lora_config,
+            strategy_config=self.strategy_configs.get(strategy),
             classifier_dropout=self.classifier_dropout,
             device=self.device,
             cache_dir=self._cache_dir,
@@ -395,8 +441,8 @@ class ScGPTAnnotationRunner:
             model=model,
             task="classification",
             batch_size=split.batch_size,
-            epochs=_HEAD_EPOCHS if strategy == "head" else _LORA_EPOCHS,
-            lr=1e-3,
+            epochs=_STRATEGY_EPOCHS[strategy],
+            lr=_STRATEGY_LR[strategy],
             device=self.device,
             early_stopping_patience=2,
             seed=self.random_state,
@@ -409,16 +455,10 @@ class ScGPTAnnotationRunner:
         runtime_sec = perf_counter() - started_at
         return _StrategyResult(
             strategy=strategy,
-            validation_metrics={
-                "accuracy": float(validation_metrics["accuracy"]),
-                "macro_f1": float(validation_metrics["macro_f1"]),
-            },
-            test_metrics={
-                "accuracy": float(test_metrics["accuracy"]),
-                "macro_f1": float(test_metrics["macro_f1"]),
-            },
+            validation_metrics=_classification_summary(validation_metrics),
+            test_metrics=_classification_summary(test_metrics),
             runtime_sec=runtime_sec,
-            trainable_parameters=_count_trainable_parameters(trainer.model),
+            trainable_parameters=count_trainable_parameters(trainer.model),
             predictions_test=test_predictions,
             model=cast(ScGPTAnnotationModel, trainer.model),
             probe_state=None,
@@ -430,8 +470,18 @@ class ScGPTAnnotationRunner:
                 "strategy": result.strategy,
                 "validation_accuracy": result.validation_metrics["accuracy"],
                 "validation_macro_f1": result.validation_metrics["macro_f1"],
+                "validation_balanced_accuracy": result.validation_metrics.get(
+                    "balanced_accuracy",
+                    float("nan"),
+                ),
+                "validation_auroc_ovr": result.validation_metrics.get("auroc_ovr", float("nan")),
                 "test_accuracy": result.test_metrics["accuracy"],
                 "test_macro_f1": result.test_metrics["macro_f1"],
+                "test_balanced_accuracy": result.test_metrics.get(
+                    "balanced_accuracy",
+                    float("nan"),
+                ),
+                "test_auroc_ovr": result.test_metrics.get("auroc_ovr", float("nan")),
                 "runtime_sec": result.runtime_sec,
                 "trainable_parameters": result.trainable_parameters,
             }
@@ -444,12 +494,13 @@ class ScGPTAnnotationRunner:
         ordered = frame.sort_values(
             [
                 "validation_macro_f1",
+                "validation_balanced_accuracy",
                 "validation_accuracy",
                 "trainable_parameters",
                 "runtime_sec",
                 "strategy_rank",
             ],
-            ascending=[False, False, True, True, True],
+            ascending=[False, False, False, True, True, True],
             kind="mergesort",
         ).reset_index(drop=True)
         return ordered.drop(columns=["strategy_rank"])
@@ -471,13 +522,19 @@ class ScGPTAnnotationRunner:
             "best_strategy": self.best_strategy_,
             "validation_accuracy": float(best_row["validation_accuracy"]),
             "validation_macro_f1": float(best_row["validation_macro_f1"]),
+            "validation_balanced_accuracy": float(best_row["validation_balanced_accuracy"]),
             "test_accuracy": float(best_row["test_accuracy"]),
             "test_macro_f1": float(best_row["test_macro_f1"]),
+            "test_balanced_accuracy": float(best_row["test_balanced_accuracy"]),
             "num_cells": float(self.data_report_.num_cells if self.data_report_ else adata.n_obs),
             "num_genes_matched": float(
                 self.data_report_.num_genes_matched if self.data_report_ else 0
             ),
         }
+        if not pd.isna(best_row["validation_auroc_ovr"]):
+            report_metrics["validation_auroc_ovr"] = float(best_row["validation_auroc_ovr"])
+        if not pd.isna(best_row["test_auroc_ovr"]):
+            report_metrics["test_auroc_ovr"] = float(best_row["test_auroc_ovr"])
         extra_sections: list[str] = []
         if self.data_report_ is not None:
             if self.data_report_.warnings:
@@ -626,8 +683,10 @@ class ScGPTAnnotationRunner:
                 results.append(self._run_trainable_strategy(split=split, strategy=strategy))
 
         strategy_frame = self._strategy_frame(results)
-        best_strategy = str(strategy_frame.iloc[0]["strategy"])
-        result_by_strategy = {result.strategy: result for result in results}
+        best_strategy = cast(AnnotationStrategy, str(strategy_frame.iloc[0]["strategy"]))
+        result_by_strategy: dict[str, _StrategyResult] = {
+            str(result.strategy): result for result in results
+        }
         best_result = result_by_strategy[best_strategy]
         self.best_strategy_ = best_strategy
         self.label_categories_ = report.label_categories
@@ -786,11 +845,7 @@ class ScGPTAnnotationRunner:
         if self.summary_ is not None:
             strategy_metrics = self.summary_.strategy_metrics.to_dict(orient="records")
         best_metrics: dict[str, Any] = next(
-            (
-                row
-                for row in strategy_metrics
-                if str(row.get("strategy")) == self.best_strategy_
-            ),
+            (row for row in strategy_metrics if str(row.get("strategy")) == self.best_strategy_),
             {},
         )
         manifest = {
@@ -804,8 +859,10 @@ class ScGPTAnnotationRunner:
             "test_size": self.test_size,
             "random_state": self.random_state,
             "classifier_dropout": self.classifier_dropout,
+            "strategy_configs": serialize_strategy_configs(self.strategy_configs),
             "lora_config": (
                 {
+                    "config_type": "lora",
                     "rank": self.lora_config.rank,
                     "alpha": self.lora_config.alpha,
                     "dropout": self.lora_config.dropout,
@@ -894,12 +951,20 @@ class ScGPTAnnotationRunner:
             msg = "Saved scGPT annotation manifest is missing required fields."
             raise ValueError(msg)
 
+        strategy_configs_payload = manifest.get("strategy_configs")
         lora_config = manifest.get("lora_config")
+        deserialized_configs = deserialize_strategy_configs(strategy_configs_payload)
+        compatibility_lora: LoRAConfig | None = None
+        if not deserialized_configs and lora_config is not None:
+            maybe_lora = deserialize_strategy_configs({"lora": lora_config}).get("lora")
+            if isinstance(maybe_lora, LoRAConfig):
+                compatibility_lora = maybe_lora
         runner = cls(
             label_key=str(manifest["label_key"]),
             checkpoint=str(manifest.get("checkpoint_id", DEFAULT_SCGPT_CHECKPOINT)),
             strategies=tuple(
-                str(value) for value in manifest.get("strategies", _DEFAULT_STRATEGIES)
+                cast(AnnotationStrategy, str(value))
+                for value in manifest.get("strategies", _DEFAULT_STRATEGIES)
             ),
             batch_size=int(manifest.get("batch_size", 64)),
             val_size=float(manifest.get("val_size", 0.15)),
@@ -907,20 +972,12 @@ class ScGPTAnnotationRunner:
             random_state=int(manifest.get("random_state", 42)),
             device=device,
             classifier_dropout=float(manifest.get("classifier_dropout", 0.1)),
-            lora_config=(
-                ScGPTLoRAConfig(
-                    rank=int(lora_config["rank"]),
-                    alpha=float(lora_config["alpha"]),
-                    dropout=float(lora_config["dropout"]),
-                    target_modules=tuple(str(value) for value in lora_config["target_modules"]),
-                )
-                if lora_config is not None
-                else None
-            ),
+            strategy_configs=deserialized_configs or None,
+            lora_config=compatibility_lora,
             output_dir=manifest.get("output_dir"),
         )
         runner._cache_dir = Path(cache_dir) if cache_dir is not None else None
-        runner.best_strategy_ = str(manifest["best_strategy"])
+        runner.best_strategy_ = cast(AnnotationStrategy, str(manifest["best_strategy"]))
         runner.label_categories_ = tuple(
             str(value) for value in manifest.get("label_categories", ())
         )
@@ -946,9 +1003,9 @@ class ScGPTAnnotationRunner:
             model = load_scgpt_annotation_model(
                 num_classes=len(runner.label_categories_),
                 checkpoint=runner.checkpoint,
-                tuning_strategy=runner.best_strategy_,
+                tuning_strategy=cast(AnnotationStrategy, runner.best_strategy_),
                 label_categories=runner.label_categories_,
-                lora_config=runner.lora_config,
+                strategy_config=runner.strategy_configs.get(runner.best_strategy_),
                 classifier_dropout=runner.classifier_dropout,
                 device=device,
                 cache_dir=runner._cache_dir,
@@ -972,12 +1029,14 @@ def adapt_scgpt_annotation(
     *,
     label_key: str,
     checkpoint: str = DEFAULT_SCGPT_CHECKPOINT,
-    strategies: tuple[str, ...] = _DEFAULT_STRATEGIES,
+    strategies: tuple[AnnotationStrategy, ...] = _DEFAULT_STRATEGIES,
     batch_size: int = 64,
     val_size: float = 0.15,
     test_size: float = 0.15,
     random_state: int = 42,
     device: str = "auto",
+    strategy_configs: Mapping[str, PEFTConfig] | None = None,
+    lora_config: ScGPTLoRAConfig | LoRAConfig | None = None,
     output_dir: str | Path | None = None,
 ) -> ScGPTAnnotationRunner:
     """Run the experimental wrapper-first scGPT annotation workflow in one call.
@@ -1003,6 +1062,10 @@ def adapt_scgpt_annotation(
         Random seed used for splitting and trainable strategies.
     device
         ``"auto"``, ``"cpu"``, or ``"cuda"``.
+    strategy_configs
+        Optional per-strategy PEFT configuration mapping.
+    lora_config
+        Backward-compatible LoRA config alias for ``strategy_configs={"lora": ...}``.
     output_dir
         Optional artifact directory for reports, plots, and saved state.
 
@@ -1026,6 +1089,8 @@ def adapt_scgpt_annotation(
         test_size=test_size,
         random_state=random_state,
         device=device,
+        strategy_configs=strategy_configs,
+        lora_config=lora_config,
         output_dir=output_dir,
     )
     runner.fit_compare(adata)

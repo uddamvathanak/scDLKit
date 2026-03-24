@@ -17,6 +17,7 @@ Available now:
 
 - stable baseline workflows through `TaskRunner`
 - experimental labeled annotation adaptation through `adapt_annotation(...)`
+- a static published annotation tutorial plus tutorial-status audit page
 
 Paper target:
 
@@ -145,14 +146,16 @@ This fine-tuning path is still experimental and intentionally narrow:
 - official scGPT `whole-human` checkpoint only
 - annotation only
 - default quickstart comparison is `frozen_probe` plus `head`
-- LoRA remains opt-in through `strategies=("frozen_probe", "head", "lora")`
+- heavier annotation benchmark matrices add `full_finetune`, `lora`,
+  `adapter`, `prefix_tuning`, and `ia3`
 
 Related docs:
 
+- Tutorial: [Main annotation tutorial: human-pancreas wrapper workflow](https://uddamvathanak.github.io/scDLKit/_tutorials/scgpt_human_pancreas_annotation.html)
 - Tutorial: [Experimental scGPT dataset-specific annotation](https://uddamvathanak.github.io/scDLKit/_tutorials/scgpt_dataset_specific_annotation.html)
-- Tutorial: [Experimental scGPT human-pancreas annotation](https://uddamvathanak.github.io/scDLKit/_tutorials/scgpt_human_pancreas_annotation.html)
 - API: [Experimental annotation quickstart API](https://uddamvathanak.github.io/scDLKit/api/annotation.html)
 - Guide: [Annotation benchmarks](https://uddamvathanak.github.io/scDLKit/guides/annotation-benchmarks.html)
+- Status: [Tutorial execution status](https://uddamvathanak.github.io/scDLKit/tutorials/status.html)
 
 ## Start Here
 
@@ -184,7 +187,8 @@ Related docs:
 - Built-in benchmark gates on small Scanpy datasets before tutorial defaults change.
 - Gene-expression-focused scope while the core toolkit stabilizes.
 - Experimental frozen scGPT embeddings for human PBMC workflows.
-- Experimental scGPT annotation fine-tuning with head-only and LoRA strategies.
+- Experimental scGPT annotation benchmarking with frozen, head-only, full
+  fine-tuning, and PEFT strategy support on the current scGPT path.
 
 ## Supported platforms
 

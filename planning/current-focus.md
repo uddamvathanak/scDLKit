@@ -6,31 +6,37 @@ Current milestone:
 Why now:
 - annotation is the strongest research-facing capability already present in the
   repo
-- it is the fastest path from current code to paper-grade evidence
-- it sets the benchmark, artifact, and PEFT comparison conventions for the
-  later spatial, integration, and perturbation pillars
+- the generic PEFT layer and annotation benchmark code now exist, so the next
+  work is evidence freeze rather than more speculative API design
+- it sets the benchmark, artifact, and PEFT comparison conventions for later
+  spatial, integration, and perturbation pillars
 
 Top 3 deliverables:
 
-1. lock an explicit annotation task spec with full-label, low-label, and
-   cross-study regimes
-2. define the annotation benchmark matrix across frozen, full-FT, LoRA,
-   adapters, prefix tuning, and IA3-style scaling
-3. promote one annotation tutorial to the main research-facing surface and turn
-   its outputs into figure-ready artifacts
+1. run and audit the first full annotation benchmark artifact bundle from
+   `scripts/run_annotation_benchmark.py`
+2. keep the human-pancreas notebook as the main static executed annotation
+   tutorial with visible last-run metadata
+3. freeze the annotation pillar docs and figures so the task can be promoted
+   from `Pilot` only when benchmark artifacts are actually in hand
 
 Blockers:
 
-- full fine-tuning baseline is not yet implemented in the current foundation path
-- non-LoRA PEFT methods are still paper targets rather than repo features
-- low-label and cross-study annotation regimes are not yet encoded into the
-  benchmark workflow
+- the full annotation matrix is heavier than the default CI lane and must be
+  validated through dedicated workflows and cached datasets
+- the public annotation pillar should not be promoted from `Pilot` until the
+  first benchmark artifact bundle is reviewed
+- cross-model breadth is still future work, so the docs need to stay precise
+  about the current scGPT-only implementation
 
 Exit criteria:
 
-- annotation checklist has a locked task spec and dataset shortlist
-- annotation figure inventory is defined
-- current annotation evidence is tracked as `Pilot` rather than hand-waved
+- annotation benchmark artifacts exist for full-label, low-label, cross-study,
+  and Pareto reporting
+- the main annotation tutorial remains the audited static human-pancreas
+  notebook
+- annotation can be described as `Implemented` only with benchmark artifacts,
+  tests, docs, and tutorial evidence in place
 - the next milestone after annotation is clearly ready to be spatial
 
 Next milestone after this one:

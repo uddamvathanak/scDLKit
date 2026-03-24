@@ -1,0 +1,44 @@
+name: annotation-benchmark
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 4 * * 2"
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  PYTHONUNBUFFERED: "1"
+  SCDLKIT_CACHE_DIR: ${{ github.workspace }}/.cache/scdlkit
+  OMP_NUM_THREADS: "2"
+  MKL_NUM_THREADS: "2"
+  OPENBLAS_NUM_THREADS: "2"
+  NUMBA_NUM_THREADS: "2"
+  TORCH_NUM_THREADS: "2"
+
+jobs:
+  annotation-benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Restore foundation and dataset cache
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.SCDLKIT_CACHE_DIR }}
+          key: scgpt-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+      - name: Install package and benchmark dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[foundation,tutorials,docs]
+      - name: Run annotation benchmark
+        run: python scripts/run_annotation_benchmark.py --profile full --output-dir artifacts/annotation_pillar
+      - name: Upload annotation benchmark artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: annotation-benchmark-artifacts
+          path: artifacts/annotation_pillar

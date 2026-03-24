@@ -74,19 +74,24 @@ def scgpt_persistence_adata() -> AnnData:
     return adata
 
 
-def test_runner_save_and_load_round_trip_for_head_strategy(
+@pytest.mark.parametrize(
+    "strategy",
+    ["head", "full_finetune", "adapter", "prefix_tuning", "ia3", "lora"],
+)
+def test_runner_save_and_load_round_trip_for_trainable_strategies(
     scgpt_persistence_cache_dir: Path,
     scgpt_persistence_adata: AnnData,
     tmp_path: Path,
+    strategy: str,
 ) -> None:
     runner = ScGPTAnnotationRunner(
         label_key="louvain",
-        strategies=("head",),
+        strategies=(strategy,),
         batch_size=8,
         device="cpu",
     )
     runner.fit_compare(scgpt_persistence_adata)
-    save_dir = runner.save(tmp_path / "saved_head_runner")
+    save_dir = runner.save(tmp_path / f"saved_{strategy}_runner")
     assert (save_dir / "manifest.json").exists()
     assert (save_dir / "model_state.pt").exists()
 

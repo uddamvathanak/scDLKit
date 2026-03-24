@@ -3,56 +3,15 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
 
 import torch
 from torch import Tensor, nn
 from torch.nn import functional
 
+from scdlkit.foundation.peft import LoRAConfig
 from scdlkit.foundation.scgpt import ScGPTBackbone
 
-_ALLOWED_TARGET_MODULES = ("out_proj", "linear1", "linear2")
-
-
-@dataclass(frozen=True, slots=True)
-class ScGPTLoRAConfig:
-    """Configuration for scGPT LoRA tuning.
-
-    Parameters
-    ----------
-    rank
-        Low-rank factorization dimension.
-    alpha
-        Scaling factor applied to the low-rank update.
-    dropout
-        Dropout applied to LoRA inputs for supported wrapped linear layers.
-    target_modules
-        Supported transformer-layer modules to wrap in the current experimental
-        release line.
-    """
-
-    rank: int = 8
-    alpha: float = 16.0
-    dropout: float = 0.05
-    target_modules: tuple[str, ...] = _ALLOWED_TARGET_MODULES
-
-    def __post_init__(self) -> None:
-        if self.rank <= 0:
-            msg = "LoRA rank must be positive."
-            raise ValueError(msg)
-        if self.alpha <= 0:
-            msg = "LoRA alpha must be positive."
-            raise ValueError(msg)
-        if not 0.0 <= self.dropout < 1.0:
-            msg = "LoRA dropout must be in the range [0, 1)."
-            raise ValueError(msg)
-        invalid = sorted(set(self.target_modules) - set(_ALLOWED_TARGET_MODULES))
-        if invalid:
-            msg = (
-                "Unsupported LoRA target modules: "
-                f"{', '.join(invalid)}. Supported values are {', '.join(_ALLOWED_TARGET_MODULES)}."
-            )
-            raise ValueError(msg)
+ScGPTLoRAConfig = LoRAConfig
 
 
 class LoRALinear(nn.Module):
@@ -96,7 +55,7 @@ class LoRALinear(nn.Module):
         return base + update * self.scaling
 
 
-def apply_scgpt_lora(backbone: ScGPTBackbone, config: ScGPTLoRAConfig) -> None:
+def apply_scgpt_lora(backbone: ScGPTBackbone, config: LoRAConfig) -> None:
     """Inject LoRA modules into the supported scGPT transformer layers."""
 
     for layer in backbone.transformer_encoder.layers:
@@ -121,3 +80,11 @@ def apply_scgpt_lora(backbone: ScGPTBackbone, config: ScGPTLoRAConfig) -> None:
                 alpha=config.alpha,
                 dropout=config.dropout,
             )
+
+
+__all__ = [
+    "LoRALinear",
+    "LoRAConfig",
+    "ScGPTLoRAConfig",
+    "apply_scgpt_lora",
+]

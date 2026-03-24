@@ -13,10 +13,15 @@ The current scope is still narrow:
 - human scRNA-seq only
 - official scGPT `whole-human` checkpoint only
 - annotation only
-- strategies limited to:
+- default quickstart strategies:
   - frozen probe
   - head-only tuning
+- heavier benchmark-only strategies:
+  - full fine-tuning
   - LoRA tuning
+  - adapter tuning
+  - prefix tuning
+  - IA3 tuning
 
 ## Required input shape
 
@@ -76,7 +81,16 @@ This one call:
 - keeps the best fitted strategy
 - writes the standard artifact bundle
 
-LoRA remains available by explicit opt-in through `strategies=("frozen_probe", "head", "lora")`.
+The heavier annotation benchmark matrix extends to:
+
+- `full_finetune`
+- `lora`
+- `adapter`
+- `prefix_tuning`
+- `ia3`
+
+Those strategies are opt-in and intentionally live outside the default
+quickstart tutorial path.
 
 ## Write results back into `AnnData`
 
@@ -131,11 +145,11 @@ Drop down to the `Trainer` path when you want:
 
 ## What remains experimental
 
-- no full-backbone fine-tuning
 - no non-human support
 - no checkpoints beyond `whole-human`
 - no perturbation, spatial, or multimodal workflows
 - no claim that scGPT always beats classical baselines
+- current model implementation is still `scGPT` only
 
 The main product value of this path is not universal superiority. It is the ability to compare adaptation strategies on your own labeled dataset with a reproducible, Scanpy-compatible workflow.
 
@@ -144,4 +158,4 @@ Under the hood, this top-level beginner path is still backed by the experimental
 If you want to see the same workflow on a non-PBMC human dataset before trying
 your own data, start with:
 
-- [Experimental scGPT human-pancreas annotation](/_tutorials/scgpt_human_pancreas_annotation)
+- [Main annotation tutorial: human-pancreas wrapper workflow](/_tutorials/scgpt_human_pancreas_annotation)

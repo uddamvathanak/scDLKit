@@ -16,9 +16,12 @@ The public scope is still deliberately narrow:
 - experimental cell-type annotation fine-tuning is now supported through:
   - frozen linear probe
   - head-only tuning
+  - full fine-tuning
   - LoRA tuning
+  - adapter tuning
+  - prefix tuning
+  - IA3 tuning
 - no `TaskRunner` support yet
-- no full-backbone fine-tuning yet
 
 ## Install
 
@@ -36,7 +39,8 @@ Use the experimental foundation path when you want to:
 - decide whether your dataset needs:
   - only frozen embeddings
   - a trainable classification head
-  - parameter-efficient LoRA tuning
+  - a full-backbone baseline
+  - one of the available PEFT methods
 
 This is the bridge between the baseline toolkit and later foundation-model adaptation work.
 
@@ -65,7 +69,16 @@ This wrapper:
 - writes standard report artifacts
 - makes it easy to annotate `AnnData` and save the best fitted runner
 
-LoRA remains available by explicit opt-in through `strategies=("frozen_probe", "head", "lora")`.
+The heavier annotation benchmark matrix extends to:
+
+- `full_finetune`
+- `lora`
+- `adapter`
+- `prefix_tuning`
+- `ia3`
+
+Those heavier strategies are intentionally not part of the default docs
+quickstart.
 
 ## Inspect before training
 
@@ -172,9 +185,21 @@ The lower-level `Trainer` path and `scdlkit.foundation` helpers remain the advan
 - head-only tuning:
   - cheapest trainable path
   - use when the frozen probe is useful but not good enough
+- full fine-tuning:
+  - unconstrained reference baseline
+  - use when you want to measure the cost of training the whole backbone
 - LoRA tuning:
-  - first parameter-efficient adaptation path
+  - good first PEFT baseline
   - use when you want more flexibility than a frozen backbone plus head
+- adapter tuning:
+  - parameter-efficient residual bottleneck path
+  - use when you want a lightweight trainable module without low-rank updates
+- prefix tuning:
+  - prompt-like trainable prefix path
+  - use when you want to bias the transformer layers without unfreezing the backbone
+- IA3 tuning:
+  - multiplicative activation-scaling path
+  - use when you want a very small trainable parameter footprint
 
 ## Current limitations
 
@@ -182,7 +207,7 @@ The lower-level `Trainer` path and `scdlkit.foundation` helpers remain the advan
 - only the official `whole-human` checkpoint is supported
 - user datasets must have labels for annotation fine-tuning
 - gene overlap with the checkpoint vocabulary still gates compatibility
-- full-backbone fine-tuning is intentionally deferred
+- current model implementation is still `scGPT` only
 - this release does not claim perturbation, spatial, or multimodal support
 
 ## Tutorials
@@ -190,7 +215,7 @@ The lower-level `Trainer` path and `scdlkit.foundation` helpers remain the advan
 - frozen embeddings: [Experimental scGPT PBMC embeddings](/_tutorials/scgpt_pbmc_embeddings)
 - annotation tuning: [Experimental scGPT cell-type annotation](/_tutorials/scgpt_cell_type_annotation)
 - dataset-specific wrapper workflow: [Experimental scGPT dataset-specific annotation](/_tutorials/scgpt_dataset_specific_annotation)
-- beyond-PBMC wrapper workflow: [Experimental scGPT human-pancreas annotation](/_tutorials/scgpt_human_pancreas_annotation)
+- beyond-PBMC wrapper workflow: [Main annotation tutorial: human-pancreas wrapper workflow](/_tutorials/scgpt_human_pancreas_annotation)
 - benchmark framing: [Annotation benchmarks](./annotation-benchmarks.md)
 - user-data guide: [Experimental annotation on your data](/guides/annotation-on-your-data)
 
@@ -203,7 +228,11 @@ The goal is not to claim that foundation models always beat classical baselines.
 - `PCA + logistic regression`
 - frozen scGPT linear probe
 - head-only tuning
-- LoRA tuning
+- full fine-tuning
+- LoRA
+- adapters
+- prefix tuning
+- IA3
 
 That comparison story is the main product value of the current foundation release line.
 

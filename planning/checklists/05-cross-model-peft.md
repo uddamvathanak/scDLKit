@@ -15,7 +15,13 @@ credible when the wrapper, PEFT, and benchmark story exists beyond scGPT.
 ## Current state
 
 - current foundation-model support is scGPT only
-- current PEFT support is LoRA only
+- generic PEFT support now exists on the scGPT annotation path for:
+  - full fine-tuning
+  - LoRA
+  - adapters
+  - prefix tuning
+  - IA3
+- cross-model parity for those methods does not exist yet
 
 ## Exit artifacts
 

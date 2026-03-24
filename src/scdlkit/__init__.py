@@ -9,8 +9,14 @@ The package exposes two main public routes:
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+# Import torch before NumPy-heavy dependencies on Windows. In the contributor
+# CUDA environment, importing NumPy first can break torch DLL loading.
+if os.name == "nt":  # pragma: no cover - exercised in Windows GPU envs
+    import torch  # noqa: F401
 
 from anndata import AnnData
 
@@ -21,7 +27,7 @@ from scdlkit.runner import TaskRunner
 from scdlkit.training import Trainer
 
 if TYPE_CHECKING:
-    from scdlkit.foundation import ScGPTAnnotationDataReport
+    from scdlkit.foundation import LoRAConfig, PEFTConfig, ScGPTAnnotationDataReport
 
 _DEFAULT_ANNOTATION_CHECKPOINT = "whole-human"
 _FoundationRunnerBase: type[Any] = object
@@ -54,6 +60,7 @@ class AnnotationRunner(_FoundationRunnerBase):
     """
 
     if _FOUNDATION_IMPORT_ERROR is not None:  # pragma: no cover - minimal install guard
+
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             msg = (
                 "Experimental annotation support requires the foundation extra. "
@@ -144,6 +151,8 @@ def adapt_annotation(
     test_size: float = 0.15,
     random_state: int = 42,
     device: str = "auto",
+    strategy_configs: dict[str, PEFTConfig] | None = None,
+    lora_config: LoRAConfig | None = None,
     output_dir: str | Path | None = None,
 ) -> AnnotationRunner:
     """Run the experimental beginner annotation quickstart in one call.
@@ -170,6 +179,12 @@ def adapt_annotation(
         Random seed used for splitting and trainable strategies.
     device
         ``"auto"``, ``"cpu"``, or ``"cuda"``.
+    strategy_configs
+        Optional per-strategy PEFT configuration mapping for advanced
+        experimental strategy comparisons.
+    lora_config
+        Backward-compatible alias for
+        ``strategy_configs={"lora": LoRAConfig(...)}``.
     output_dir
         Optional artifact directory for reports, plots, and saved runner state.
 
@@ -207,6 +222,8 @@ def adapt_annotation(
         test_size=test_size,
         random_state=random_state,
         device=device,
+        strategy_configs=strategy_configs,
+        lora_config=lora_config,
         output_dir=output_dir,
     )
     runner.fit_compare(adata)

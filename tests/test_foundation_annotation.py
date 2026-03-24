@@ -11,6 +11,9 @@ from anndata import AnnData
 
 from scdlkit.evaluation import evaluate_predictions
 from scdlkit.foundation import (
+    AdapterConfig,
+    IA3Config,
+    PrefixTuningConfig,
     ScGPTLoRAConfig,
     load_scgpt_annotation_model,
     load_scgpt_model,
@@ -187,6 +190,78 @@ def test_load_scgpt_annotation_model_lora_strategy_injects_lora_modules(
     assert frozen_backbone
 
 
+def test_load_scgpt_annotation_model_full_finetune_strategy_unfreezes_backbone(
+    scgpt_cache_dir: Path,
+) -> None:
+    model = load_scgpt_annotation_model(
+        num_classes=3,
+        checkpoint="whole-human",
+        tuning_strategy="full_finetune",
+        label_categories=("B_cell", "Monocyte", "T_cell"),
+        device="cpu",
+        cache_dir=scgpt_cache_dir,
+    )
+    backbone_trainable = [
+        name for name, parameter in model.backbone.named_parameters() if parameter.requires_grad
+    ]
+    assert backbone_trainable
+
+
+def test_load_scgpt_annotation_model_adapter_strategy_injects_adapter_modules(
+    scgpt_cache_dir: Path,
+) -> None:
+    model = load_scgpt_annotation_model(
+        num_classes=3,
+        checkpoint="whole-human",
+        tuning_strategy="adapter",
+        label_categories=("B_cell", "Monocyte", "T_cell"),
+        strategy_config=AdapterConfig(bottleneck_dim=8, dropout=0.05),
+        device="cpu",
+        cache_dir=scgpt_cache_dir,
+    )
+    trainable_names = [
+        name for name, parameter in model.named_parameters() if parameter.requires_grad
+    ]
+    assert any("attention_adapter" in name for name in trainable_names)
+    assert any("feed_forward_adapter" in name for name in trainable_names)
+
+
+def test_load_scgpt_annotation_model_prefix_tuning_strategy_injects_prefix_parameters(
+    scgpt_cache_dir: Path,
+) -> None:
+    model = load_scgpt_annotation_model(
+        num_classes=3,
+        checkpoint="whole-human",
+        tuning_strategy="prefix_tuning",
+        label_categories=("B_cell", "Monocyte", "T_cell"),
+        strategy_config=PrefixTuningConfig(prefix_length=4, dropout=0.05),
+        device="cpu",
+        cache_dir=scgpt_cache_dir,
+    )
+    trainable_names = [
+        name for name, parameter in model.named_parameters() if parameter.requires_grad
+    ]
+    assert any("prefix_embeddings" in name for name in trainable_names)
+
+
+def test_load_scgpt_annotation_model_ia3_strategy_injects_scaling_parameters(
+    scgpt_cache_dir: Path,
+) -> None:
+    model = load_scgpt_annotation_model(
+        num_classes=3,
+        checkpoint="whole-human",
+        tuning_strategy="ia3",
+        label_categories=("B_cell", "Monocyte", "T_cell"),
+        strategy_config=IA3Config(init_scale=1.0),
+        device="cpu",
+        cache_dir=scgpt_cache_dir,
+    )
+    trainable_names = [
+        name for name, parameter in model.named_parameters() if parameter.requires_grad
+    ]
+    assert any("ia3_scale" in name for name in trainable_names)
+
+
 def test_load_scgpt_annotation_model_rejects_unsupported_strategy(
     scgpt_cache_dir: Path,
 ) -> None:
@@ -200,7 +275,10 @@ def test_load_scgpt_annotation_model_rejects_unsupported_strategy(
         )
 
 
-@pytest.mark.parametrize("tuning_strategy", ["head", "lora"])
+@pytest.mark.parametrize(
+    "tuning_strategy",
+    ["head", "full_finetune", "lora", "adapter", "prefix_tuning", "ia3"],
+)
 def test_trainer_fit_and_predict_work_for_scgpt_annotation_model(
     scgpt_cache_dir: Path,
     scgpt_annotation_adata: AnnData,

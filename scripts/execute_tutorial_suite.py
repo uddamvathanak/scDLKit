@@ -11,7 +11,7 @@ from time import perf_counter
 
 import nbformat
 from nbconvert.preprocessors import ExecutePreprocessor
-from tutorial_catalog import ROOT
+from tutorial_catalog import EXECUTED_STEMS, NOTEBOOK_GROUPS, NOTEBOOK_MAP, REQUIRED_ARTIFACTS, ROOT
 
 ARTIFACTS_DIR = ROOT / "artifacts"
 NOTEBOOK_ARTIFACTS_DIR = ARTIFACTS_DIR / "notebooks"
@@ -22,7 +22,6 @@ RUNTIME_BUDGETS = {
     "full": 1200.0,
 }
 
-
 @dataclass(frozen=True, slots=True)
 class TutorialSpec:
     name: str
@@ -32,202 +31,15 @@ class TutorialSpec:
     required_artifacts: tuple[Path, ...]
 
 
-TUTORIAL_SPECS = (
+TUTORIAL_SPECS = tuple(
     TutorialSpec(
-        name="scanpy_pbmc_quickstart",
-        group="classic",
-        source=ROOT / "examples" / "train_vae_pbmc.ipynb",
-        executed_stem="scanpy_pbmc_quickstart",
-        required_artifacts=(
-            ROOT / "artifacts" / "pbmc_vae_quickstart" / "report.md",
-            ROOT / "artifacts" / "pbmc_vae_quickstart" / "report.csv",
-            ROOT / "artifacts" / "pbmc_vae_quickstart" / "loss_curve.png",
-            ROOT / "artifacts" / "pbmc_vae_quickstart" / "latent_umap.png",
-        ),
-    ),
-    TutorialSpec(
-        name="downstream_scanpy_after_scdlkit",
-        group="classic",
-        source=ROOT / "examples" / "downstream_scanpy_after_scdlkit.ipynb",
-        executed_stem="downstream_scanpy_after_scdlkit",
-        required_artifacts=(
-            ROOT / "artifacts" / "downstream_scanpy_after_scdlkit" / "report.md",
-            ROOT / "artifacts" / "downstream_scanpy_after_scdlkit" / "report.csv",
-            ROOT / "artifacts" / "downstream_scanpy_after_scdlkit" / "latent_umap.png",
-            ROOT / "artifacts" / "downstream_scanpy_after_scdlkit" / "leiden_umap.png",
-            ROOT / "artifacts" / "downstream_scanpy_after_scdlkit" / "marker_dotplot.png",
-            ROOT / "artifacts" / "downstream_scanpy_after_scdlkit" / "rank_genes_groups.csv",
-        ),
-    ),
-    TutorialSpec(
-        name="pbmc_model_comparison",
-        group="classic",
-        source=ROOT / "examples" / "compare_models_pbmc.ipynb",
-        executed_stem="pbmc_model_comparison",
-        required_artifacts=(
-            ROOT / "artifacts" / "pbmc_compare" / "benchmark_metrics.csv",
-            ROOT / "artifacts" / "pbmc_compare" / "benchmark_comparison.png",
-            ROOT / "artifacts" / "pbmc_compare" / "pca_reference_umap.png",
-            ROOT / "artifacts" / "pbmc_compare" / "best_baseline_umap.png",
-        ),
-    ),
-    TutorialSpec(
-        name="reconstruction_sanity_pbmc",
-        group="classic",
-        source=ROOT / "examples" / "reconstruction_sanity_pbmc.ipynb",
-        executed_stem="reconstruction_sanity_pbmc",
-        required_artifacts=(
-            ROOT / "artifacts" / "reconstruction_sanity_pbmc" / "report.md",
-            ROOT / "artifacts" / "reconstruction_sanity_pbmc" / "report.csv",
-            ROOT / "artifacts" / "reconstruction_sanity_pbmc" / "loss_curve.png",
-            ROOT / "artifacts" / "reconstruction_sanity_pbmc" / "reconstruction_scatter.png",
-            ROOT / "artifacts" / "reconstruction_sanity_pbmc" / "gene_panel_reconstruction.png",
-        ),
-    ),
-    TutorialSpec(
-        name="pbmc_classification",
-        group="classic",
-        source=ROOT / "examples" / "classification_demo.ipynb",
-        executed_stem="pbmc_classification",
-        required_artifacts=(
-            ROOT / "artifacts" / "pbmc_classification" / "report.md",
-            ROOT / "artifacts" / "pbmc_classification" / "report.csv",
-            ROOT / "artifacts" / "pbmc_classification" / "loss_curve.png",
-            ROOT / "artifacts" / "pbmc_classification" / "confusion_matrix.png",
-        ),
-    ),
-    TutorialSpec(
-        name="custom_model_extension",
-        group="classic",
-        source=ROOT / "examples" / "custom_model_extension.ipynb",
-        executed_stem="custom_model_extension",
-        required_artifacts=(
-            ROOT / "artifacts" / "custom_model_extension" / "report.md",
-            ROOT / "artifacts" / "custom_model_extension" / "report.csv",
-            ROOT / "artifacts" / "custom_model_extension" / "loss_curve.png",
-            ROOT / "artifacts" / "custom_model_extension" / "latent_umap.png",
-        ),
-    ),
-    TutorialSpec(
-        name="scgpt_pbmc_embeddings",
-        group="foundation",
-        source=ROOT / "examples" / "scgpt_pbmc_embeddings.ipynb",
-        executed_stem="scgpt_pbmc_embeddings",
-        required_artifacts=(
-            ROOT / "artifacts" / "scgpt_pbmc_embeddings" / "report.md",
-            ROOT / "artifacts" / "scgpt_pbmc_embeddings" / "report.csv",
-            ROOT / "artifacts" / "scgpt_pbmc_embeddings" / "latent_umap.png",
-            ROOT / "artifacts" / "scgpt_pbmc_embeddings" / "linear_probe_confusion_matrix.png",
-            ROOT / "artifacts" / "scgpt_pbmc_embeddings" / "embedding_summary.json",
-        ),
-    ),
-    TutorialSpec(
-        name="scgpt_cell_type_annotation",
-        group="foundation",
-        source=ROOT / "examples" / "scgpt_cell_type_annotation.ipynb",
-        executed_stem="scgpt_cell_type_annotation",
-        required_artifacts=(
-            ROOT / "artifacts" / "scgpt_cell_type_annotation" / "report.md",
-            ROOT / "artifacts" / "scgpt_cell_type_annotation" / "report.csv",
-            ROOT / "artifacts" / "scgpt_cell_type_annotation" / "strategy_metrics.csv",
-            ROOT / "artifacts" / "scgpt_cell_type_annotation" / "frozen_embedding_umap.png",
-            ROOT / "artifacts" / "scgpt_cell_type_annotation" / "lora_embedding_umap.png",
-            (
-                ROOT
-                / "artifacts"
-                / "scgpt_cell_type_annotation"
-                / "best_strategy_confusion_matrix.png"
-            ),
-        ),
-    ),
-    TutorialSpec(
-        name="scgpt_dataset_specific_annotation",
-        group="foundation",
-        source=ROOT / "examples" / "scgpt_dataset_specific_annotation.ipynb",
-        executed_stem="scgpt_dataset_specific_annotation",
-        required_artifacts=(
-            ROOT / "artifacts" / "scgpt_dataset_specific_annotation" / "report.md",
-            ROOT / "artifacts" / "scgpt_dataset_specific_annotation" / "report.csv",
-            ROOT / "artifacts" / "scgpt_dataset_specific_annotation" / "strategy_metrics.csv",
-            (
-                ROOT
-                / "artifacts"
-                / "scgpt_dataset_specific_annotation"
-                / "best_strategy_confusion_matrix.png"
-            ),
-            ROOT / "artifacts" / "scgpt_dataset_specific_annotation" / "frozen_embedding_umap.png",
-            (
-                ROOT
-                / "artifacts"
-                / "scgpt_dataset_specific_annotation"
-                / "best_strategy_embedding_umap.png"
-            ),
-            (
-                ROOT
-                / "artifacts"
-                / "scgpt_dataset_specific_annotation"
-                / "best_model"
-                / "manifest.json"
-            ),
-            (
-                ROOT
-                / "artifacts"
-                / "scgpt_dataset_specific_annotation"
-                / "best_model"
-                / "model_state.pt"
-            ),
-        ),
-    ),
-    TutorialSpec(
-        name="scgpt_human_pancreas_annotation",
-        group="foundation",
-        source=ROOT / "examples" / "scgpt_human_pancreas_annotation.ipynb",
-        executed_stem="scgpt_human_pancreas_annotation",
-        required_artifacts=(
-            ROOT / "artifacts" / "scgpt_human_pancreas_annotation" / "report.md",
-            ROOT / "artifacts" / "scgpt_human_pancreas_annotation" / "report.csv",
-            ROOT / "artifacts" / "scgpt_human_pancreas_annotation" / "strategy_metrics.csv",
-            (
-                ROOT
-                / "artifacts"
-                / "scgpt_human_pancreas_annotation"
-                / "best_strategy_confusion_matrix.png"
-            ),
-            ROOT / "artifacts" / "scgpt_human_pancreas_annotation" / "frozen_embedding_umap.png",
-            (
-                ROOT
-                / "artifacts"
-                / "scgpt_human_pancreas_annotation"
-                / "best_strategy_embedding_umap.png"
-            ),
-            (
-                ROOT
-                / "artifacts"
-                / "scgpt_human_pancreas_annotation"
-                / "best_model"
-                / "manifest.json"
-            ),
-            (
-                ROOT
-                / "artifacts"
-                / "scgpt_human_pancreas_annotation"
-                / "best_model"
-                / "model_state.pt"
-            ),
-        ),
-    ),
-    TutorialSpec(
-        name="synthetic_smoke",
-        group="classic",
-        source=ROOT / "examples" / "first_run_synthetic.ipynb",
-        executed_stem="first_run_synthetic",
-        required_artifacts=(
-            ROOT / "artifacts" / "first_run_notebook" / "report.md",
-            ROOT / "artifacts" / "first_run_notebook" / "report.csv",
-            ROOT / "artifacts" / "first_run_notebook" / "loss_curve.png",
-            ROOT / "artifacts" / "first_run_notebook" / "latent_pca.png",
-        ),
-    ),
+        name=published_name.removesuffix(".ipynb"),
+        group=NOTEBOOK_GROUPS[published_name],
+        source=source_path,
+        executed_stem=EXECUTED_STEMS[published_name],
+        required_artifacts=REQUIRED_ARTIFACTS[published_name],
+    )
+    for published_name, source_path in NOTEBOOK_MAP.items()
 )
 
 

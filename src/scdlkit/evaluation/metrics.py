@@ -11,9 +11,11 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import (
     accuracy_score,
     adjusted_rand_score,
+    balanced_accuracy_score,
     confusion_matrix,
     f1_score,
     normalized_mutual_info_score,
+    roc_auc_score,
     silhouette_score,
 )
 from sklearn.neighbors import NearestNeighbors
@@ -77,8 +79,20 @@ def representation_metrics(
 def classification_metrics(y_true: np.ndarray, logits: np.ndarray) -> dict[str, object]:
     predicted = logits.argmax(axis=1)
     labels = np.arange(logits.shape[1]) if logits.ndim == 2 else None
-    return {
+    metrics: dict[str, object] = {
         "accuracy": float(accuracy_score(y_true, predicted)),
         "macro_f1": float(f1_score(y_true, predicted, average="macro")),
+        "balanced_accuracy": float(balanced_accuracy_score(y_true, predicted)),
         "confusion_matrix": confusion_matrix(y_true, predicted, labels=labels).tolist(),
     }
+    try:
+        if logits.ndim == 2 and logits.shape[1] > 1 and len(np.unique(y_true)) > 1:
+            if logits.shape[1] == 2:
+                metrics["auroc_ovr"] = float(roc_auc_score(y_true, logits[:, 1]))
+            else:
+                metrics["auroc_ovr"] = float(
+                    roc_auc_score(y_true, logits, multi_class="ovr", average="macro")
+                )
+    except ValueError:
+        pass
+    return metrics

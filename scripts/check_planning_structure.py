@@ -6,6 +6,8 @@ import argparse
 import sys
 from pathlib import Path
 
+from tutorial_catalog import TUTORIAL_IDS
+
 ROOT = Path(__file__).resolve().parents[1]
 
 REQUIRED_ROADMAP_HEADINGS = (
@@ -60,14 +62,14 @@ def _missing_headings(path: Path, headings: tuple[str, ...]) -> list[str]:
 
 def _tutorial_targets_exist(path: Path) -> list[str]:
     issues: list[str] = []
+    known_tutorial_ids = set(TUTORIAL_IDS)
     text = path.read_text(encoding="utf-8").splitlines()
     for line in text:
         stripped = line.strip()
         if not stripped.startswith(":link: /_tutorials/"):
             continue
         tutorial_id = stripped.removeprefix(":link: /_tutorials/")
-        tutorial_path = ROOT / "docs" / "_tutorials" / f"{tutorial_id}.ipynb"
-        if not tutorial_path.exists():
+        if tutorial_id not in known_tutorial_ids:
             issues.append(
                 f"Tutorial card links to missing notebook `{tutorial_id}`."
             )

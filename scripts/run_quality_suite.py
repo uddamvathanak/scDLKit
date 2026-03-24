@@ -12,6 +12,7 @@ from pathlib import Path
 from time import perf_counter
 from typing import Any
 
+import torch
 import matplotlib
 import numpy as np
 import pandas as pd
@@ -496,7 +497,7 @@ def _batch_metrics_frame(
 ) -> pd.DataFrame:
     from scdlkit.evaluation.metrics import classification_metrics
 
-    columns = ["batch", "n_cells", "accuracy", "macro_f1"]
+    columns = ["batch", "n_cells", "accuracy", "macro_f1", "balanced_accuracy", "auroc_ovr"]
     if batch_key is None or batch_key not in obs:
         return pd.DataFrame(columns=columns)
 
@@ -513,6 +514,10 @@ def _batch_metrics_frame(
                 "n_cells": int(mask.sum()),
                 "accuracy": float(metrics["accuracy"]),
                 "macro_f1": float(metrics["macro_f1"]),
+                "balanced_accuracy": float(metrics["balanced_accuracy"]),
+                "auroc_ovr": float(metrics["auroc_ovr"])
+                if isinstance(metrics.get("auroc_ovr"), (int, float))
+                else float("nan"),
             }
         )
     return pd.DataFrame.from_records(rows, columns=columns)
@@ -526,6 +531,8 @@ def _batch_metric_summary(batch_metrics: pd.DataFrame) -> dict[str, float]:
         "batch_accuracy_min": float(batch_metrics["accuracy"].min()),
         "batch_macro_f1_mean": float(batch_metrics["macro_f1"].mean()),
         "batch_macro_f1_min": float(batch_metrics["macro_f1"].min()),
+        "batch_balanced_accuracy_mean": float(batch_metrics["balanced_accuracy"].mean()),
+        "batch_balanced_accuracy_min": float(batch_metrics["balanced_accuracy"].min()),
     }
 
 
@@ -540,7 +547,7 @@ def _save_trainable_annotation_checkpoint(
     random_state: int,
     trainable_parameters: int,
     metrics: dict[str, Any],
-    lora_config: dict[str, Any] | None,
+    strategy_config: dict[str, Any] | None,
 ) -> Path:
     import torch
 
@@ -550,6 +557,7 @@ def _save_trainable_annotation_checkpoint(
         "strategy": best_strategy,
         "accuracy": float(metrics["accuracy"]),
         "macro_f1": float(metrics["macro_f1"]),
+        "balanced_accuracy": float(metrics.get("balanced_accuracy", float("nan"))),
         "runtime_sec": float(metrics["runtime_sec"]),
         "trainable_parameters": int(trainable_parameters),
     }
@@ -564,7 +572,10 @@ def _save_trainable_annotation_checkpoint(
         "test_size": 0.15,
         "random_state": int(random_state),
         "classifier_dropout": 0.1,
-        "lora_config": lora_config,
+        "strategy_configs": (
+            {best_strategy: strategy_config} if strategy_config is not None else None
+        ),
+        "lora_config": strategy_config if best_strategy == "lora" else None,
         "metrics": strategy_metrics,
         "strategy_metrics": [strategy_metrics],
         "output_dir": str(output_dir),
@@ -644,14 +655,22 @@ def _foundation_annotation_profile(profile: str) -> dict[str, int]:
             "max_genes": 32,
             "min_gene_overlap": 16,
             "head_epochs": 1,
+            "full_finetune_epochs": 1,
             "lora_epochs": 1,
+            "adapter_epochs": 1,
+            "prefix_tuning_epochs": 1,
+            "ia3_epochs": 1,
         }
     return {
         "max_cells": 64,
         "max_genes": 128,
         "min_gene_overlap": 64,
         "head_epochs": 3,
+        "full_finetune_epochs": 2,
         "lora_epochs": 2,
+        "adapter_epochs": 3,
+        "prefix_tuning_epochs": 3,
+        "ia3_epochs": 3,
     }
 
 
@@ -770,9 +789,7 @@ def run_foundation_pca_reference(
 ) -> dict[str, Any]:
     from scdlkit.evaluation.metrics import representation_metrics
 
-    output_dir = (
-        output_root / dataset_name / "foundation" / "pca_foundation" / f"seed_{seed}"
-    )
+    output_dir = output_root / dataset_name / "foundation" / "pca_foundation" / f"seed_{seed}"
     output_dir.mkdir(parents=True, exist_ok=True)
     subset = _subset_adata_for_foundation(adata, label_key=label_key, seed=seed)
     x_matrix = _to_dense(subset.X)
@@ -826,13 +843,7 @@ def run_scgpt_embedding_baseline(
     from scdlkit.foundation import load_scgpt_model, prepare_scgpt_data
     from scdlkit.training import Trainer
 
-    output_dir = (
-        output_root
-        / dataset_name
-        / "foundation"
-        / "scgpt_whole_human"
-        / f"seed_{seed}"
-    )
+    output_dir = output_root / dataset_name / "foundation" / "scgpt_whole_human" / f"seed_{seed}"
     output_dir.mkdir(parents=True, exist_ok=True)
     subset = _subset_adata_for_foundation(adata, label_key=label_key, seed=seed)
     prepared = prepare_scgpt_data(
@@ -1132,7 +1143,11 @@ def run_scgpt_annotation_strategy(
 ) -> dict[str, Any]:
     from scdlkit.evaluation.metrics import classification_metrics, representation_metrics
     from scdlkit.foundation import (
-        ScGPTLoRAConfig,
+        AdapterConfig,
+        IA3Config,
+        LoRAConfig,
+        PrefixTuningConfig,
+        count_trainable_parameters,
         load_scgpt_annotation_model,
         load_scgpt_model,
         prepare_scgpt_data,
@@ -1164,10 +1179,49 @@ def run_scgpt_annotation_strategy(
     test_adata = _subset_adata_from_dataset(annotation_adata, test_dataset)
     label_categories = list(prepared.label_categories or [])
 
+    strategy_specs: dict[str, dict[str, Any]] = {
+        "scgpt_head": {
+            "tuning_strategy": "head",
+            "epochs": profile_config["head_epochs"],
+            "lr": 5e-3,
+            "strategy_config": None,
+        },
+        "scgpt_full_finetune": {
+            "tuning_strategy": "full_finetune",
+            "epochs": profile_config["full_finetune_epochs"],
+            "lr": 5e-4,
+            "strategy_config": None,
+        },
+        "scgpt_lora": {
+            "tuning_strategy": "lora",
+            "epochs": profile_config["lora_epochs"],
+            "lr": 2e-3,
+            "strategy_config": LoRAConfig(rank=4, alpha=8.0, dropout=0.05),
+        },
+        "scgpt_adapter": {
+            "tuning_strategy": "adapter",
+            "epochs": profile_config["adapter_epochs"],
+            "lr": 2e-3,
+            "strategy_config": AdapterConfig(bottleneck_dim=64, dropout=0.05),
+        },
+        "scgpt_prefix_tuning": {
+            "tuning_strategy": "prefix_tuning",
+            "epochs": profile_config["prefix_tuning_epochs"],
+            "lr": 2e-3,
+            "strategy_config": PrefixTuningConfig(prefix_length=20, dropout=0.05),
+        },
+        "scgpt_ia3": {
+            "tuning_strategy": "ia3",
+            "epochs": profile_config["ia3_epochs"],
+            "lr": 2e-3,
+            "strategy_config": IA3Config(init_scale=1.0),
+        },
+    }
+
     started_at = perf_counter()
     if model_name == "scgpt_frozen_probe":
         model = load_scgpt_model("whole-human", device="auto")
-        lora_config_payload = None
+        strategy_config_payload = None
         trainer = Trainer(
             model=model,
             task="representation",
@@ -1191,53 +1245,36 @@ def run_scgpt_annotation_strategy(
         }
         trainable_parameters = 0
     else:
-        tuning_strategy = "head" if model_name == "scgpt_head" else "lora"
-        lora_config_payload = (
-            {
-                "rank": 4,
-                "alpha": 8.0,
-                "dropout": 0.05,
-                "target_modules": ["linear1", "linear2"],
-            }
-            if tuning_strategy == "lora"
-            else None
+        if model_name not in strategy_specs:
+            msg = f"Unsupported scGPT annotation benchmark model '{model_name}'."
+            raise ValueError(msg)
+        strategy_spec = strategy_specs[model_name]
+        tuning_strategy = str(strategy_spec["tuning_strategy"])
+        strategy_config = strategy_spec["strategy_config"]
+        strategy_config_payload = (
+            strategy_config.to_payload() if strategy_config is not None else None
         )
         model = load_scgpt_annotation_model(
             num_classes=len(label_categories),
             checkpoint="whole-human",
-            tuning_strategy=tuning_strategy,
+            tuning_strategy=tuning_strategy,  # type: ignore[arg-type]
             label_categories=prepared.label_categories,
             device="auto",
-            lora_config=(
-                ScGPTLoRAConfig(
-                    rank=int(lora_config_payload["rank"]),
-                    alpha=float(lora_config_payload["alpha"]),
-                    dropout=float(lora_config_payload["dropout"]),
-                    target_modules=tuple(
-                        str(value) for value in lora_config_payload["target_modules"]
-                    ),
-                )
-                if lora_config_payload is not None
-                else None
-            ),
+            strategy_config=strategy_config,
         )
         trainer = Trainer(
             model=model,
             task="classification",
             batch_size=prepared.batch_size,
-            epochs=(
-                profile_config["head_epochs"]
-                if tuning_strategy == "head"
-                else profile_config["lora_epochs"]
-            ),
-            lr=5e-3 if tuning_strategy == "head" else 2e-3,
+            epochs=int(strategy_spec["epochs"]),
+            lr=float(strategy_spec["lr"]),
             device="auto",
             early_stopping_patience=3,
             seed=seed,
         )
         trainer.fit(split.train, split.val)
         predictions = trainer.predict_dataset(test_dataset)
-        trainable_parameters = _count_trainable_parameters(model)
+        trainable_parameters = count_trainable_parameters(model)
     runtime_sec = perf_counter() - started_at
 
     metrics = classification_metrics(predictions["y"], predictions["logits"])
@@ -1299,11 +1336,18 @@ def run_scgpt_annotation_strategy(
                 metrics={
                     "accuracy": metrics["accuracy"],
                     "macro_f1": metrics["macro_f1"],
+                    "balanced_accuracy": metrics["balanced_accuracy"],
                     "runtime_sec": runtime_sec,
                 },
-                lora_config=lora_config_payload,
+                strategy_config=strategy_config_payload,
             )
         )
+
+    checkpoint_size_bytes = None
+    if best_model_artifact is not None:
+        checkpoint_path = Path(best_model_artifact) / "model_state.pt"
+        if checkpoint_path.exists():
+            checkpoint_size_bytes = int(checkpoint_path.stat().st_size)
 
     return {
         "dataset": dataset_name,
@@ -1316,6 +1360,7 @@ def run_scgpt_annotation_strategy(
         "artifact_dir": str(output_dir),
         "trainable_parameters": trainable_parameters,
         "best_model_artifact": best_model_artifact,
+        "checkpoint_size_bytes": checkpoint_size_bytes,
         "batch_metrics_artifact": str(output_dir / "batch_metrics.csv"),
         "confusion_matrix_artifact": str(output_dir / "confusion_matrix.png"),
         "latent_umap_artifact": str(output_dir / "latent_umap.png"),
@@ -1534,9 +1579,10 @@ def evaluate_quality_gates(metrics_frame: pd.DataFrame, *, profile: str) -> list
                     f"{QUALITY_GATES['scgpt_vs_pca_max_drop']:.2f} "
                     f"(PCA {pca_value:.3f}, scGPT {scgpt_value:.3f})."
                 )
-        if float(scgpt_rows["silhouette"].mean()) >= float(
-            pca_rows["silhouette"].mean()
-        ) + QUALITY_GATES["scgpt_silhouette_win"]:
+        if (
+            float(scgpt_rows["silhouette"].mean())
+            >= float(pca_rows["silhouette"].mean()) + QUALITY_GATES["scgpt_silhouette_win"]
+        ):
             winning_datasets += 1
     if winning_datasets == 0:
         issues.append(
@@ -1547,6 +1593,14 @@ def evaluate_quality_gates(metrics_frame: pd.DataFrame, *, profile: str) -> list
         (metrics_frame["dataset"] == "pbmc3k_processed")
         & (metrics_frame["task"] == "foundation_annotation")
     ]
+    tuned_model_names = (
+        "scgpt_head",
+        "scgpt_full_finetune",
+        "scgpt_lora",
+        "scgpt_adapter",
+        "scgpt_prefix_tuning",
+        "scgpt_ia3",
+    )
     frozen_probe = annotation_rows[annotation_rows["model"] == "scgpt_frozen_probe"]
     head_rows = annotation_rows[annotation_rows["model"] == "scgpt_head"]
     lora_rows = annotation_rows[annotation_rows["model"] == "scgpt_lora"]
@@ -1585,8 +1639,17 @@ def evaluate_quality_gates(metrics_frame: pd.DataFrame, *, profile: str) -> list
                 f"(head {head_macro_f1:.3f}, LoRA {lora_macro_f1:.3f})."
             )
 
-    best_accuracy = max(head_accuracy, lora_accuracy)
-    best_macro_f1 = max(head_macro_f1, lora_macro_f1)
+    tuned_rows = annotation_rows[annotation_rows["model"].isin(tuned_model_names)]
+    best_accuracy = (
+        float(tuned_rows["accuracy"].max())
+        if not tuned_rows.empty
+        else max(head_accuracy, lora_accuracy)
+    )
+    best_macro_f1 = (
+        float(tuned_rows["macro_f1"].max())
+        if not tuned_rows.empty
+        else max(head_macro_f1, lora_macro_f1)
+    )
     if best_accuracy < QUALITY_GATES["scgpt_annotation_tuned_accuracy_min"]:
         issues.append(
             "No tuned scGPT annotation strategy reached the minimum accuracy target "
@@ -1605,9 +1668,7 @@ def evaluate_quality_gates(metrics_frame: pd.DataFrame, *, profile: str) -> list
         & (metrics_frame["task"] == "foundation_annotation")
     ]
     if not pancreas_rows.empty:
-        tuned_rows = pancreas_rows[
-            pancreas_rows["model"].isin(("scgpt_head", "scgpt_lora"))
-        ]
+        tuned_rows = pancreas_rows[pancreas_rows["model"].isin(tuned_model_names)]
         if tuned_rows.empty:
             issues.append(
                 "OpenProblems human pancreas annotation benchmark is missing tuned strategies."
@@ -1910,8 +1971,7 @@ def render_summary_markdown(summary: dict[str, Any]) -> str:
     lines.append(f"- Tutorial artifacts validated: `{tutorial_checks['validated']}`")
     if tutorial_checks["validated"]:
         lines.append(
-            "- Tutorial artifacts passed: "
-            f"`{tutorial_checks['artifact_checks']['passed']}`"
+            f"- Tutorial artifacts passed: `{tutorial_checks['artifact_checks']['passed']}`"
         )
         if tutorial_checks["missing_notebooks"]:
             lines.extend(

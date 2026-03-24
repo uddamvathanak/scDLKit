@@ -23,6 +23,7 @@ Use this page when you want to:
 
 ```python
 from scdlkit.foundation import (
+    AdapterConfig,
     load_scgpt_annotation_model,
     prepare_scgpt_data,
     split_scgpt_data,
@@ -34,7 +35,8 @@ split = split_scgpt_data(prepared)
 model = load_scgpt_annotation_model(
     num_classes=len(prepared.label_categories or ()),
     label_categories=prepared.label_categories,
-    tuning_strategy="head",
+    tuning_strategy="adapter",
+    strategy_config=AdapterConfig(bottleneck_dim=64, dropout=0.05),
 )
 trainer = Trainer(model=model, task="classification", batch_size=prepared.batch_size)
 trainer.fit(split.train, split.val)
@@ -45,7 +47,16 @@ trainer.fit(split.train, split.val)
 - `load_scgpt_model(...)` loads the official `whole-human` checkpoint for frozen embeddings.
 - `prepare_scgpt_data(...)` tokenizes compatible human `AnnData` and optionally encodes labels.
 - `split_scgpt_data(...)` creates train, validation, and test subsets without re-tokenizing.
-- `load_scgpt_annotation_model(...)` builds a `head` or `lora` scGPT classifier for `Trainer`.
+- `load_scgpt_annotation_model(...)` builds a `head`, `full_finetune`,
+  `lora`, `adapter`, `prefix_tuning`, or `ia3` scGPT classifier for `Trainer`.
+- Generic PEFT configs are exposed under `scdlkit.foundation` as:
+  - `PEFTConfig`
+  - `LoRAConfig`
+  - `AdapterConfig`
+  - `PrefixTuningConfig`
+  - `IA3Config`
+- `ScGPTLoRAConfig` remains available as a compatibility alias in the `0.1.x`
+  release line.
 - `ScGPTAnnotationRunner` and `adapt_scgpt_annotation(...)` expose the explicit wrapper-first foundation path.
 
 ## Input expectations
@@ -63,6 +74,8 @@ trainer.fit(split.train, split.val)
 - `load_scgpt_model(...)` returns an embedding model for frozen inference.
 - `load_scgpt_annotation_model(...)` returns a classification model ready for `Trainer(..., task="classification")`.
 - `ScGPTAnnotationRunner` and `adapt_scgpt_annotation(...)` can emit reports, plots, predictions, and saved runner state.
+- saved runner manifests now include strategy metadata and serialized
+  strategy-config values so trainable strategies can be reloaded cleanly.
 
 ## Failure modes / raises
 
@@ -79,14 +92,23 @@ trainer.fit(split.train, split.val)
   - human scRNA-seq only
   - scGPT `whole-human` only
   - annotation tuning only
-  - `head` and `lora` as the trainable strategies
+  - the current model implementation is still `scGPT` only
+- The heavier scGPT annotation matrix now includes:
+  - `head`
+  - `full_finetune`
+  - `lora`
+  - `adapter`
+  - `prefix_tuning`
+  - `ia3`
+- Cross-model support for `scFoundation`, `CellFM`, and `Nicheformer` remains
+  future work.
 
 ## Related tutorial(s)
 
 - [Experimental scGPT PBMC embeddings](/_tutorials/scgpt_pbmc_embeddings)
+- [Main annotation tutorial: human-pancreas wrapper workflow](/_tutorials/scgpt_human_pancreas_annotation)
 - [Experimental scGPT cell-type annotation](/_tutorials/scgpt_cell_type_annotation)
 - [Experimental scGPT dataset-specific annotation](/_tutorials/scgpt_dataset_specific_annotation)
-- [Experimental scGPT human-pancreas annotation](/_tutorials/scgpt_human_pancreas_annotation)
 - [Annotation benchmarks](/guides/annotation-benchmarks)
 
 ```{eval-rst}
@@ -122,6 +144,31 @@ trainer.fit(split.train, split.val)
 
 ```{eval-rst}
 .. autoclass:: scdlkit.foundation.ScGPTSplitData
+   :members:
+```
+
+```{eval-rst}
+.. autoclass:: scdlkit.foundation.PEFTConfig
+   :members:
+```
+
+```{eval-rst}
+.. autoclass:: scdlkit.foundation.LoRAConfig
+   :members:
+```
+
+```{eval-rst}
+.. autoclass:: scdlkit.foundation.AdapterConfig
+   :members:
+```
+
+```{eval-rst}
+.. autoclass:: scdlkit.foundation.PrefixTuningConfig
+   :members:
+```
+
+```{eval-rst}
+.. autoclass:: scdlkit.foundation.IA3Config
    :members:
 ```
 

@@ -7,6 +7,7 @@ The current public scope is intentionally narrow:
 - wrapper-first experimental scGPT dataset adaptation
 - top-level ``scdlkit.adapt_annotation`` and ``scdlkit.AnnotationRunner`` are
   the easiest public entrypoints
+- generic experimental PEFT configs for annotation benchmarking
 - human single-cell RNA data only
 - Scanpy handoff through ``adata.obsm``
 
@@ -18,6 +19,7 @@ from scdlkit.foundation.annotation import (
     ScGPTAnnotationModel,
     load_scgpt_annotation_model,
 )
+from scdlkit.foundation.base import FoundationAnnotationAdapter, FoundationModelAdapter
 from scdlkit.foundation.cache import ensure_scgpt_checkpoint, list_scgpt_checkpoints
 from scdlkit.foundation.data import (
     ScGPTAnnotationDataReport,
@@ -28,6 +30,15 @@ from scdlkit.foundation.data import (
     split_scgpt_data,
 )
 from scdlkit.foundation.lora import ScGPTLoRAConfig
+from scdlkit.foundation.peft import (
+    AdapterConfig,
+    AnnotationStrategy,
+    IA3Config,
+    LoRAConfig,
+    PEFTConfig,
+    PrefixTuningConfig,
+    count_trainable_parameters,
+)
 from scdlkit.foundation.runner import (
     ScGPTAnnotationRunner,
     ScGPTAnnotationRunSummary,
@@ -40,6 +51,14 @@ __all__ = [
     "ScGPTAnnotationModel",
     "ScGPTAnnotationRunSummary",
     "ScGPTAnnotationRunner",
+    "AdapterConfig",
+    "AnnotationStrategy",
+    "FoundationAnnotationAdapter",
+    "FoundationModelAdapter",
+    "IA3Config",
+    "LoRAConfig",
+    "PEFTConfig",
+    "PrefixTuningConfig",
     "ScGPTLoRAConfig",
     "ScGPTEmbeddingModel",
     "ScGPTPreparedData",
@@ -52,4 +71,5 @@ __all__ = [
     "load_scgpt_model",
     "prepare_scgpt_data",
     "split_scgpt_data",
+    "count_trainable_parameters",
 ]

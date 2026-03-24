@@ -314,6 +314,66 @@
     "has_failure_modes": true
   },
   {
+    "feature_id": "peft_config",
+    "group": "experimental_foundation",
+    "public_surface": ["scdlkit.foundation.PEFTConfig"],
+    "status": "experimental",
+    "tutorial_refs": ["scgpt_human_pancreas_annotation", "scgpt_cell_type_annotation"],
+    "api_page": "docs/api/foundation.md",
+    "has_api_contract": true,
+    "has_parameter_expectations": true,
+    "has_return_expectations": true,
+    "has_failure_modes": true
+  },
+  {
+    "feature_id": "lora_config",
+    "group": "experimental_foundation",
+    "public_surface": ["scdlkit.foundation.LoRAConfig"],
+    "status": "experimental",
+    "tutorial_refs": ["scgpt_human_pancreas_annotation", "scgpt_cell_type_annotation"],
+    "api_page": "docs/api/foundation.md",
+    "has_api_contract": true,
+    "has_parameter_expectations": true,
+    "has_return_expectations": true,
+    "has_failure_modes": true
+  },
+  {
+    "feature_id": "adapter_config",
+    "group": "experimental_foundation",
+    "public_surface": ["scdlkit.foundation.AdapterConfig"],
+    "status": "experimental",
+    "tutorial_refs": ["scgpt_human_pancreas_annotation", "scgpt_cell_type_annotation"],
+    "api_page": "docs/api/foundation.md",
+    "has_api_contract": true,
+    "has_parameter_expectations": true,
+    "has_return_expectations": true,
+    "has_failure_modes": true
+  },
+  {
+    "feature_id": "prefix_tuning_config",
+    "group": "experimental_foundation",
+    "public_surface": ["scdlkit.foundation.PrefixTuningConfig"],
+    "status": "experimental",
+    "tutorial_refs": ["scgpt_human_pancreas_annotation", "scgpt_cell_type_annotation"],
+    "api_page": "docs/api/foundation.md",
+    "has_api_contract": true,
+    "has_parameter_expectations": true,
+    "has_return_expectations": true,
+    "has_failure_modes": true
+  },
+  {
+    "feature_id": "ia3_config",
+    "group": "experimental_foundation",
+    "public_surface": ["scdlkit.foundation.IA3Config"],
+    "status": "experimental",
+    "tutorial_refs": ["scgpt_human_pancreas_annotation", "scgpt_cell_type_annotation"],
+    "api_page": "docs/api/foundation.md",
+    "has_api_contract": true,
+    "has_parameter_expectations": true,
+    "has_return_expectations": true,
+    "has_failure_modes": true
+  },
+  {
     "feature_id": "scgpt_lora_config",
     "group": "experimental_foundation",
     "public_surface": ["scdlkit.foundation.ScGPTLoRAConfig"],

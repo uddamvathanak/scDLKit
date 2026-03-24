@@ -151,6 +151,19 @@ def test_annotation_runner_defaults_and_lora_opt_in() -> None:
     )
     assert lora_runner.strategies == ("frozen_probe", "head", "lora")
 
+    expanded_runner = AnnotationRunner(
+        label_key="louvain",
+        strategies=("frozen_probe", "head", "full_finetune", "adapter", "prefix_tuning", "ia3"),
+    )
+    assert expanded_runner.strategies == (
+        "frozen_probe",
+        "head",
+        "full_finetune",
+        "adapter",
+        "prefix_tuning",
+        "ia3",
+    )
+
 
 def test_annotation_runner_load_round_trip(
     alias_cache_dir: Path,

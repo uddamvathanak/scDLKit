@@ -5,6 +5,11 @@ scDLKit now presents its public tutorial surface around four research tasks.
 The goal is to make the paper identity obvious without pretending that every
 task is already implemented at equal maturity.
 
+For a publication-style audit of the published notebook copies, see the
+[tutorial execution status](./status.md) page. That page shows the current
+static tutorial surface and the last recorded run date embedded in each
+published notebook.
+
 ## Main research tasks
 
 ````{grid} 1 2 2 2
@@ -21,8 +26,10 @@ Can scDLKit already support a credible low-code adaptation story on labeled
 human data?
 
 Model and task scope:
-Current pilot uses the experimental scGPT adaptation path on labeled human
-single-cell RNA data.
+Current pilot is implemented on the experimental scGPT adaptation path for
+labeled human single-cell RNA data. The published main tutorial stays on the
+CPU-practical `frozen_probe + head` quickstart, while the dedicated annotation
+benchmark extends the matrix to full fine-tuning plus the PEFT family.
 
 Figure role:
 Primary supervised adaptation and PEFT comparison figure family.
@@ -137,7 +144,6 @@ main research task tracks.
 
 - [Experimental scGPT cell-type annotation](/_tutorials/scgpt_cell_type_annotation)
 - [Experimental scGPT dataset-specific annotation](/_tutorials/scgpt_dataset_specific_annotation)
-- [Experimental scGPT human-pancreas annotation](/_tutorials/scgpt_human_pancreas_annotation)
 
 ### Maintainer and smoke path
 
@@ -153,7 +159,7 @@ If you want the current stable baseline path first:
 
 If you want the current research-facing annotation path first:
 
-1. [Experimental scGPT human-pancreas annotation](/_tutorials/scgpt_human_pancreas_annotation)
+1. [Human-pancreas annotation quickstart](/_tutorials/scgpt_human_pancreas_annotation)
 2. [Experimental scGPT dataset-specific annotation](/_tutorials/scgpt_dataset_specific_annotation)
 3. [Experimental scGPT cell-type annotation](/_tutorials/scgpt_cell_type_annotation)
 
@@ -172,4 +178,5 @@ If you want the current research-facing annotation path first:
 /_tutorials/scgpt_dataset_specific_annotation
 /_tutorials/scgpt_human_pancreas_annotation
 /_tutorials/synthetic_smoke
+status
 ```

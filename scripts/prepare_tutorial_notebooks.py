@@ -8,7 +8,18 @@ from pathlib import Path
 
 import nbformat
 from nbconvert.preprocessors import ExecutePreprocessor
-from tutorial_catalog import ASSET_MAP, NOTEBOOK_GROUPS, NOTEBOOK_MAP
+from tutorial_catalog import (
+    ASSET_MAP,
+    NOTEBOOK_GROUPS,
+    NOTEBOOK_MAP,
+    REQUIRED_ARTIFACTS,
+)
+from tutorial_publication import (
+    attach_publication_metadata,
+    infer_last_run_utc,
+    infer_latest_path_mtime_utc,
+    utc_now_iso,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCS_DIR = ROOT / "docs"
@@ -70,6 +81,10 @@ def _selected_notebooks(group: str, only: list[str] | None) -> list[tuple[str, P
     ]
 
 
+def _missing_artifacts(target_name: str) -> list[Path]:
+    return [path for path in REQUIRED_ARTIFACTS[target_name] if not path.exists()]
+
+
 def sync_notebooks(*, execute: bool, group: str, only: list[str] | None) -> None:
     TUTORIAL_DIR.mkdir(parents=True, exist_ok=True)
     for target_name, source_path in _selected_notebooks(group, only):
@@ -82,6 +97,10 @@ def sync_notebooks(*, execute: bool, group: str, only: list[str] | None) -> None
         )
         notebook = nbformat.read(source_path, as_version=4)
         target_path = TUTORIAL_DIR / target_name
+        last_run_utc = infer_last_run_utc(notebook)
+        if last_run_utc is None:
+            last_run_utc = infer_latest_path_mtime_utc(REQUIRED_ARTIFACTS[target_name])
+        artifact_validation = "not-checked"
         if execute:
             print(
                 f"[prepare_tutorial_notebooks] executing {target_name} for published docs",
@@ -89,10 +108,28 @@ def sync_notebooks(*, execute: bool, group: str, only: list[str] | None) -> None
             )
             executor = ExecutePreprocessor(timeout=None, kernel_name="python3")
             executor.preprocess(notebook, {"metadata": {"path": str(ROOT)}})
+            last_run_utc = utc_now_iso()
+            missing_artifacts = _missing_artifacts(target_name)
+            if missing_artifacts:
+                joined = ", ".join(str(path.relative_to(ROOT)) for path in missing_artifacts)
+                msg = (
+                    f"Published tutorial `{target_name}` finished executing but did not "
+                    f"produce required artifacts: {joined}"
+                )
+                raise RuntimeError(msg)
+            artifact_validation = "passed"
             print(
                 f"[prepare_tutorial_notebooks] finished executing {target_name}",
                 flush=True,
             )
+        attach_publication_metadata(
+            notebook,
+            source_path=source_path.relative_to(ROOT),
+            target_path=target_path.relative_to(ROOT),
+            execution_profile="published" if execute else None,
+            artifact_validation=artifact_validation,
+            last_run_utc=last_run_utc,
+        )
         nbformat.write(notebook, target_path)
         print(f"[prepare_tutorial_notebooks] wrote {target_path}", flush=True)
 

@@ -9,6 +9,7 @@ Today the public repo supports two main entrypoints:
 
 - stable baseline workflows through `TaskRunner`
 - experimental labeled annotation adaptation through `adapt_annotation(...)`
+- a static published annotation tutorial and status page for docs review
 
 The current implemented scope is still narrower than the paper target:
 
@@ -53,6 +54,12 @@ Status: `Pilot`
 Main question:
 Can scDLKit already support a credible low-code adaptation story on labeled
 human data?
+
+Current implementation note:
+The pilot currently runs on the experimental scGPT path only. The published
+quickstart tutorial compares `frozen_probe` and `head`, while the heavier
+annotation benchmark matrix extends to full fine-tuning, `lora`, `adapter`,
+`prefix_tuning`, and `ia3`.
 ```
 
 ```{grid-item-card} Integration / representation transfer
@@ -140,13 +147,15 @@ Use this when you want the current low-code research-facing adaptation path.
 Related docs:
 
 - [Experimental annotation quickstart API](./api/annotation.md)
-- [Experimental scGPT human-pancreas annotation](/_tutorials/scgpt_human_pancreas_annotation)
+- [Main annotation tutorial: human-pancreas wrapper workflow](/_tutorials/scgpt_human_pancreas_annotation)
 - [Experimental scGPT dataset-specific annotation](/_tutorials/scgpt_dataset_specific_annotation)
+- [Tutorial execution status](./tutorials/status.md)
 - [Roadmap](./roadmap.md)
 
 ## Supporting workflows
 
 - [Tutorial map](./tutorials/index.md)
+- [Tutorial execution status](./tutorials/status.md)
 - [Scanpy integration guide](./guides/scanpy-integration.md)
 - [Annotation benchmarks guide](./guides/annotation-benchmarks.md)
 - [Foundation-model guide](./guides/foundation-models.md)

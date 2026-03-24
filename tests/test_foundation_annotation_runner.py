@@ -10,6 +10,10 @@ import torch
 from anndata import AnnData
 
 from scdlkit.foundation import (
+    AdapterConfig,
+    IA3Config,
+    LoRAConfig,
+    PrefixTuningConfig,
     ScGPTAnnotationRunner,
     adapt_scgpt_annotation,
     inspect_scgpt_annotation_data,
@@ -171,6 +175,29 @@ def test_runner_fit_compare_populates_summary_and_predicts(
 def test_runner_defaults_to_frozen_probe_and_head() -> None:
     runner = ScGPTAnnotationRunner(label_key="louvain")
     assert runner.strategies == ("frozen_probe", "head")
+
+
+def test_runner_accepts_expanded_strategy_set_and_strategy_configs() -> None:
+    runner = ScGPTAnnotationRunner(
+        label_key="louvain",
+        strategies=(
+            "frozen_probe",
+            "head",
+            "full_finetune",
+            "lora",
+            "adapter",
+            "prefix_tuning",
+            "ia3",
+        ),
+        strategy_configs={
+            "lora": LoRAConfig(rank=4, alpha=8.0, dropout=0.05),
+            "adapter": AdapterConfig(bottleneck_dim=8, dropout=0.05),
+            "prefix_tuning": PrefixTuningConfig(prefix_length=4, dropout=0.05),
+            "ia3": IA3Config(init_scale=1.0),
+        },
+    )
+    assert runner.strategies[-4:] == ("lora", "adapter", "prefix_tuning", "ia3")
+    assert set(runner.strategy_configs) == {"lora", "adapter", "prefix_tuning", "ia3"}
 
 
 def test_adapt_scgpt_annotation_returns_fitted_runner(

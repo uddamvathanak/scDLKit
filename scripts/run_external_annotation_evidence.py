@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import torch
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,26 +20,14 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from run_quality_suite import (  # noqa: E402
-    _load_dataset,
-    run_foundation_annotation_pca_logistic,
-    run_scgpt_annotation_strategy,
+from run_annotation_benchmark import (  # noqa: E402
+    BENCHMARK_MODELS,
+    MODEL_DISPLAY_NAMES,
+    run_annotation_benchmark,
 )
 
 _DATASET_ORDER = ("pbmc68k_reduced", "openproblems_human_pancreas")
-_MODEL_ORDER = (
-    "pca_logistic_annotation",
-    "scgpt_frozen_probe",
-    "scgpt_head",
-    "scgpt_lora",
-)
-_DISPLAY_NAMES = {
-    "pca_logistic_annotation": "PCA + logistic regression",
-    "scgpt_frozen_probe": "Frozen scGPT probe",
-    "scgpt_head": "scGPT head-only tuning",
-    "scgpt_lora": "scGPT LoRA tuning",
-}
-_STRATEGY_PROFILE = "ci"
+_MODEL_ORDER = BENCHMARK_MODELS
 
 
 def _log(message: str) -> None:
@@ -47,21 +36,12 @@ def _log(message: str) -> None:
 
 
 def _configure_runtime_limits() -> None:
-    try:
-        import torch
-    except ImportError:  # pragma: no cover - torch is installed in the workflow
-        return
-
     torch.set_num_threads(2)
     torch.set_num_interop_threads(1)
 
 
 def _clear_runtime_state() -> None:
     gc.collect()
-    try:
-        import torch
-    except ImportError:  # pragma: no cover - torch is installed in the workflow
-        return
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
@@ -86,7 +66,7 @@ def _strategy_sort_value(model_name: str) -> int:
 
 def _strategy_frame(rows: list[dict[str, Any]]) -> pd.DataFrame:
     frame = pd.DataFrame.from_records(rows)
-    frame["strategy"] = frame["model"].map(_DISPLAY_NAMES).fillna(frame["model"])
+    frame["strategy"] = frame["model"].map(MODEL_DISPLAY_NAMES).fillna(frame["model"])
     ordered = frame.sort_values(
         ["dataset", "model"],
         key=lambda column: column.map(_strategy_sort_value) if column.name == "model" else column,
@@ -104,6 +84,8 @@ def _strategy_frame(rows: list[dict[str, Any]]) -> pd.DataFrame:
         "batch_accuracy_min",
         "batch_macro_f1_mean",
         "batch_macro_f1_min",
+        "balanced_accuracy",
+        "checkpoint_size_bytes",
         "artifact_dir",
         "best_model_artifact",
         "batch_metrics_artifact",
@@ -169,6 +151,10 @@ def _write_markdown_table(frame: pd.DataFrame) -> str:
     return "\n".join(lines)
 
 
+def _existing_columns(frame: pd.DataFrame, columns: list[str]) -> list[str]:
+    return [column for column in columns if column in frame.columns]
+
+
 def _write_pancreas_report(
     *,
     strategy_frame: pd.DataFrame,
@@ -176,23 +162,36 @@ def _write_pancreas_report(
     output_dir: Path,
 ) -> None:
     best_overall = strategy_frame.sort_values(
-        ["macro_f1", "accuracy", "trainable_parameters", "runtime_sec"],
-        ascending=[False, False, True, True],
+        ["macro_f1", "balanced_accuracy", "accuracy", "trainable_parameters", "runtime_sec"],
+        ascending=[False, False, False, True, True],
         kind="mergesort",
     ).iloc[0]
-    tuned_rows = strategy_frame[strategy_frame["model"].isin(("scgpt_head", "scgpt_lora"))]
+    tuned_rows = strategy_frame[
+        strategy_frame["model"].isin(
+            (
+                "scgpt_head",
+                "scgpt_full_finetune",
+                "scgpt_lora",
+                "scgpt_adapter",
+                "scgpt_prefix_tuning",
+                "scgpt_ia3",
+            )
+        )
+    ]
     best_trainable = tuned_rows.sort_values(
-        ["macro_f1", "accuracy", "trainable_parameters", "runtime_sec"],
-        ascending=[False, False, True, True],
+        ["macro_f1", "balanced_accuracy", "accuracy", "trainable_parameters", "runtime_sec"],
+        ascending=[False, False, False, True, True],
         kind="mergesort",
     ).iloc[0]
     report = {
         "dataset": "openproblems_human_pancreas",
         "best_strategy": str(best_overall["strategy"]),
         "best_macro_f1": float(best_overall["macro_f1"]),
+        "best_balanced_accuracy": float(best_overall["balanced_accuracy"]),
         "best_accuracy": float(best_overall["accuracy"]),
         "best_trainable_strategy": str(best_trainable["strategy"]),
         "best_trainable_macro_f1": float(best_trainable["macro_f1"]),
+        "best_trainable_balanced_accuracy": float(best_trainable["balanced_accuracy"]),
         "best_trainable_accuracy": float(best_trainable["accuracy"]),
     }
     pd.DataFrame([report]).to_csv(output_dir / "report.csv", index=False)
@@ -202,21 +201,27 @@ def _write_pancreas_report(
         "- Dataset: `openproblems_human_pancreas`",
         f"- Best overall strategy: `{report['best_strategy']}`",
         f"- Best overall macro F1: `{report['best_macro_f1']:.4f}`",
+        f"- Best overall balanced accuracy: `{report['best_balanced_accuracy']:.4f}`",
         f"- Best trainable strategy: `{report['best_trainable_strategy']}`",
         "",
         "## Strategy comparison",
         "",
         _write_markdown_table(
             strategy_frame[
-                [
-                    "strategy",
-                    "accuracy",
-                    "macro_f1",
-                    "runtime_sec",
-                    "trainable_parameters",
-                    "batch_accuracy_mean",
-                    "batch_macro_f1_mean",
-                ]
+                _existing_columns(
+                    strategy_frame,
+                    [
+                        "strategy",
+                        "accuracy",
+                        "macro_f1",
+                        "balanced_accuracy",
+                        "runtime_sec",
+                        "trainable_parameters",
+                        "batch_accuracy_mean",
+                        "batch_balanced_accuracy_mean",
+                        "batch_macro_f1_mean",
+                    ],
+                )
             ]
         ),
     ]
@@ -232,69 +237,28 @@ def _write_pancreas_report(
     (output_dir / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _collect_dataset_rows(
-    *,
-    dataset_name: str,
-    output_root: Path,
-) -> list[dict[str, Any]]:
-    _log(f"Loading dataset '{dataset_name}' with profile='full'.")
-    adata, spec = _load_dataset(dataset_name, profile="full")
-    rows = [
-        run_foundation_annotation_pca_logistic(
-            dataset_name=dataset_name,
-            adata=adata,
-            label_key=spec.label_key,
-            batch_key=spec.batch_key,
-            seed=42,
-            output_root=output_root,
-            profile=_STRATEGY_PROFILE,
-        )
-    ]
-    _log(
-        "Completed strategy "
-        f"'pca_logistic_annotation' for dataset '{dataset_name}'."
-    )
-    _clear_runtime_state()
-    for model_name in ("scgpt_frozen_probe", "scgpt_head", "scgpt_lora"):
-        _log(f"Starting strategy '{model_name}' for dataset '{dataset_name}'.")
-        rows.append(
-            run_scgpt_annotation_strategy(
-                dataset_name=dataset_name,
-                adata=adata,
-                label_key=spec.label_key,
-                batch_key=spec.batch_key,
-                seed=42,
-                output_root=output_root,
-                model_name=model_name,
-                profile=_STRATEGY_PROFILE,
-            )
-        )
-        _log(f"Completed strategy '{model_name}' for dataset '{dataset_name}'.")
-        _clear_runtime_state()
-    del adata
-    _clear_runtime_state()
-    return rows
-
-
 def run_external_annotation_evidence(*, output_dir: Path) -> dict[str, Path]:
     _configure_runtime_limits()
     output_dir.mkdir(parents=True, exist_ok=True)
-    benchmark_root = output_dir / "_strategy_runs"
+    benchmark_root = output_dir / "_annotation_benchmark"
     pancreas_root = output_dir / "pancreas"
     cross_dataset_root = output_dir / "cross_dataset"
     pancreas_root.mkdir(parents=True, exist_ok=True)
     cross_dataset_root.mkdir(parents=True, exist_ok=True)
 
-    all_rows: list[dict[str, Any]] = []
-    for dataset_name in _DATASET_ORDER:
-        _log(f"Collecting benchmark rows for '{dataset_name}'.")
-        all_rows.extend(
-            _collect_dataset_rows(
-                dataset_name=dataset_name,
-                output_root=benchmark_root,
-            )
-        )
-        _log(f"Finished benchmark rows for '{dataset_name}'.")
+    _log("Running the dedicated annotation benchmark for external evidence.")
+    benchmark_outputs = run_annotation_benchmark(
+        datasets=_DATASET_ORDER,
+        regimes=("full_label",),
+        profile="full",
+        strategies=_MODEL_ORDER,
+        output_dir=benchmark_root,
+        seeds=(42,),
+        label_fractions=(0.01, 0.05, 0.10),
+        cross_study_folds=("plate_like", "celseq_family", "droplet_family"),
+    )
+    strategy_metrics_path = benchmark_outputs["full_label_dir"] / "strategy_metrics.csv"
+    all_rows = pd.read_csv(strategy_metrics_path).to_dict(orient="records")
     strategy_frame = _strategy_frame(all_rows)
 
     pancreas_frame = strategy_frame[
@@ -309,8 +273,8 @@ def run_external_annotation_evidence(*, output_dir: Path) -> dict[str, Path]:
     )
 
     best_overall = pancreas_frame.sort_values(
-        ["macro_f1", "accuracy", "trainable_parameters", "runtime_sec"],
-        ascending=[False, False, True, True],
+        ["macro_f1", "balanced_accuracy", "accuracy", "trainable_parameters", "runtime_sec"],
+        ascending=[False, False, False, True, True],
         kind="mergesort",
     ).iloc[0]
     frozen_row = pancreas_frame[pancreas_frame["model"] == "scgpt_frozen_probe"].iloc[0]
@@ -327,10 +291,19 @@ def run_external_annotation_evidence(*, output_dir: Path) -> dict[str, Path]:
         pancreas_root / "best_strategy_confusion_matrix.png",
     )
     trainable_rows = pancreas_frame[
-        pancreas_frame["model"].isin(("scgpt_head", "scgpt_lora"))
+        pancreas_frame["model"].isin(
+            (
+                "scgpt_head",
+                "scgpt_full_finetune",
+                "scgpt_lora",
+                "scgpt_adapter",
+                "scgpt_prefix_tuning",
+                "scgpt_ia3",
+            )
+        )
     ].sort_values(
-        ["macro_f1", "accuracy", "trainable_parameters", "runtime_sec"],
-        ascending=[False, False, True, True],
+        ["macro_f1", "balanced_accuracy", "accuracy", "trainable_parameters", "runtime_sec"],
+        ascending=[False, False, False, True, True],
         kind="mergesort",
     )
     if not trainable_rows.empty:
@@ -341,7 +314,15 @@ def run_external_annotation_evidence(*, output_dir: Path) -> dict[str, Path]:
         _copy_tree(best_trainable_artifact, pancreas_root / "best_model")
 
     cross_dataset_frame = strategy_frame[
-        ["dataset", "strategy", "accuracy", "macro_f1", "runtime_sec", "trainable_parameters"]
+        [
+            "dataset",
+            "strategy",
+            "accuracy",
+            "macro_f1",
+            "balanced_accuracy",
+            "runtime_sec",
+            "trainable_parameters",
+        ]
     ].copy()
     cross_dataset_frame.to_csv(cross_dataset_root / "strategy_summary.csv", index=False)
     lines = [

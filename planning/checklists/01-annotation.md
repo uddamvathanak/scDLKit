@@ -14,49 +14,67 @@ story before broadening to spatial, integration, and perturbation.
 
 ## Current state
 
-- scGPT annotation adaptation exists
-- LoRA exists as the current PEFT method
-- wrapper-first annotation tutorials exist
-- beyond-PBMC annotation evidence exists
-- full fine-tuning, adapters, prefix tuning, IA3, low-label, and cross-study
-  benchmarking are still missing
+- the annotation task spec is now encoded in repo-tracked benchmark dataclasses
+- the generic PEFT layer exists and is wired into the scGPT annotation path
+- scGPT annotation now supports:
+  - `frozen_probe`
+  - `head`
+  - `full_finetune`
+  - `lora`
+  - `adapter`
+  - `prefix_tuning`
+  - `ia3`
+- the human-pancreas notebook is the main published annotation tutorial and is
+  prepared as a static docs notebook with visible status metadata
+- the dedicated annotation benchmark runner and workflow now exist
+- the remaining work is benchmark artifact freeze and public promotion from
+  `Pilot` to `Implemented`
 
 ## Exit artifacts
 
 - annotation task spec
-- dataset shortlist and registry plan
+- dataset shortlist and regime registry
 - benchmark matrix across frozen, full-FT, LoRA, adapters, prefix, and IA3
 - main annotation tutorial designation
 - figure-ready artifact list
+- first full benchmark artifact bundle
 
 ## Checklist
 
-- [ ] lock the annotation task spec
-- [ ] lock the annotation dataset shortlist
-- [ ] define the full-label regime
-- [ ] define the low-label regime
-- [ ] define the cross-study regime
-- [ ] define the frozen / linear-probe baseline
-- [ ] define the full fine-tuning baseline
-- [ ] define the LoRA baseline
-- [ ] define the adapters baseline
-- [ ] define the prefix-tuning baseline
-- [ ] define the IA3 baseline
-- [ ] decide which existing annotation notebook becomes the main research-facing tutorial
-- [ ] define the annotation figure inventory
+- [x] lock the annotation task spec
+- [x] lock the annotation dataset shortlist
+- [x] define the full-label regime
+- [x] define the low-label regime
+- [x] define the cross-study regime
+- [x] define the frozen / linear-probe baseline
+- [x] define the full fine-tuning baseline
+- [x] define the LoRA baseline
+- [x] define the adapters baseline
+- [x] define the prefix-tuning baseline
+- [x] define the IA3 baseline
+- [x] decide which existing annotation notebook becomes the main research-facing tutorial
+- [x] define the annotation figure inventory
+- [x] install the dedicated annotation benchmark workflow
+- [ ] run and review the first full benchmark artifact bundle
 
 ## Risks / blockers
 
 - the current foundation path is still scGPT-only
-- the current PEFT path is still LoRA-only
-- the annotation story can look more complete than it is if full-FT and other PEFT baselines are not tracked explicitly
+- the full annotation matrix is heavy enough that cache misses or dataset
+  download failures can distort validation time
+- the annotation story can still look more complete than it is if the public
+  status is promoted before the first benchmark artifact freeze
 
 ## Dependencies
 
 - publication operating system
 - current scGPT annotation benchmark and artifact scripts
+- OpenProblems pancreas cache path
+- tutorial publication status helpers
 
 ## Acceptance criteria
 
-- annotation milestone leaves no ambiguity about task spec, regimes, baselines, or main tutorial
-- annotation is clearly marked as `Pilot` or `Implemented` based on explicit evidence rather than impression
+- annotation milestone leaves no ambiguity about task spec, regimes, baselines,
+  or main tutorial
+- annotation remains `Pilot` until the benchmark artifact bundle is reviewed
+  and can be promoted using explicit evidence rather than impression
