@@ -1,15 +1,22 @@
-# Milestone 4: perturbation pillar
+# Milestone 3: perturbation pillar
 
 Status: planned
 
 ## Objective
 
-Define perturbation-response prediction as the fourth paper task.
+Define perturbation-response prediction as the third paper task, inheriting
+the regime and efficiency recording patterns from M1 and M2.
 
 ## Why this matters for the paper
 
-Perturbation is part of the paper’s claim that scDLKit is an adaptation and
-benchmarking layer rather than only an annotation toolkit.
+The abstract names perturbation-response prediction as the third downstream
+task. The paper claim that scDLKit covers this task cannot be defended without
+a real task pipeline with datasets, metrics, regimes, and efficiency recording.
+
+Note: this milestone was previously numbered M4. It is now M3 because the
+abstract dev order groups perturbation with spatial (both come after annotation
+and representation transfer), and perturbation is independent of the spatial
+model requirements.
 
 ## Current state
 
@@ -18,10 +25,15 @@ benchmarking layer rather than only an annotation toolkit.
 
 ## Exit artifacts
 
-- perturbation task spec
-- perturbation dataset shortlist
-- perturbation metric pipeline
+- perturbation task spec (distinguish: predict gene expression response to a
+  genetic or chemical perturbation)
+- perturbation dataset shortlist (e.g. Norman, Replogle)
+- perturbation metric pipeline (MSE, DEG overlap / recovery, Pearson, Spearman)
+- regime registry (full-label, low-label, cross-study) reusing formal regime
+  objects
+- efficiency metrics recorded per run (reusing M1 pattern)
 - first perturbation tutorial
+- first perturbation figure plan
 
 ## Checklist
 
@@ -31,18 +43,29 @@ benchmarking layer rather than only an annotation toolkit.
 - [ ] define MSE / MAE usage
 - [ ] define DE recovery metrics where relevant
 - [ ] define pseudo-bulk correlation where relevant
+- [ ] define full-label, low-label, and cross-study regimes for perturbation
+  using formal regime objects from M1
+- [ ] add efficiency metric recording to perturbation benchmark runs (reuse M1
+  pattern)
 - [ ] define the first perturbation tutorial
 - [ ] define the first perturbation figure inventory
 
 ## Risks / blockers
 
 - perturbation can drift into vague future work if the task spec is not pinned early
+- perturbation prediction may require model capabilities (e.g. masked gene
+  modeling or contrastive objectives) that are not yet implemented on any
+  foundation model path
 
 ## Dependencies
 
 - publication operating system
-- annotation milestone conventions
+- annotation and representation transfer milestone conventions for regimes,
+  efficiency metrics, and figure tracking
 
 ## Acceptance criteria
 
-- perturbation has a concrete task spec, dataset shortlist, metric plan, tutorial plan, and figure plan
+- perturbation has a concrete task spec, dataset shortlist, metric plan,
+  regime-aware evaluation structure, efficiency recording, tutorial plan, and
+  figure plan
+- the regime and efficiency patterns from M1 are demonstrably reused
