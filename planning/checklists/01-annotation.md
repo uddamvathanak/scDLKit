@@ -1,6 +1,6 @@
 # Milestone 1: annotation pillar
 
-Status: blocked
+Status: in-progress
 
 ## Objective
 
@@ -35,6 +35,21 @@ story before broadening to spatial, integration, and perturbation.
     evidence bundle supports it
 - the first full-profile benchmark attempt on `2026-03-24` did not complete
   within the local 4-hour runtime budget and currently blocks milestone closure
+- the full benchmark completed on `2026-03-25` after adding checkpoint caching
+  and per-seed data preparation caching — all 4 figures (performance, low-label,
+  cross-study, Pareto) generated as PNG (300 dpi) and SVG
+- the initial benchmark used only 2-3 epochs per strategy (surface-level) —
+  redesigned on `2026-03-25` for publication quality:
+  - convergence-based training: 10-15 epochs with early stopping (patience=5),
+    matching the scGPT Nature Methods and PEFT for scLLMs protocols
+  - LR scheduling: StepLR with gamma=0.9 per epoch (following scGPT protocol)
+  - comprehensive metrics: added weighted F1, precision, recall, Cohen's kappa,
+    MCC, per-class F1/precision/recall
+  - publication-quality figures: error bars (mean +/- std across seeds),
+    confidence bands on low-label curves, cross-study heatmap,
+    labeled Pareto scatter, radar chart, per-class F1 heatmap
+  - benchmark design rationale documented in
+    `planning/research/annotation_benchmark_design.md`
 
 ## Exit artifacts
 
@@ -43,7 +58,9 @@ story before broadening to spatial, integration, and perturbation.
 - benchmark matrix across frozen, full-FT, LoRA, adapters, prefix, and IA3
 - main annotation tutorial designation
 - figure-ready artifact list
-- first full benchmark artifact bundle with efficiency metrics per run
+- publication-quality benchmark artifact bundle with comprehensive metrics
+- 6 publication figures: performance bars, label efficiency curves,
+  cross-study heatmap, Pareto scatter, radar chart, per-class F1 heatmap
 - Pareto figure (performance vs. trainable param fraction and runtime)
 
 ## Checklist
@@ -66,11 +83,20 @@ story before broadening to spatial, integration, and perturbation.
 - [x] add efficiency metric recording to benchmark run output (trainable param
   count, total param count, wall-clock training time, peak memory, checkpoint
   size)
-- [ ] make the benchmark execution path feasible for the full matrix within the
+- [x] make the benchmark execution path feasible for the full matrix within the
   runtime budget
-- [ ] run and review the first full benchmark artifact bundle
-- [ ] verify the Pareto figure (performance vs. trainable param fraction and
+- [x] run and review the first full benchmark artifact bundle
+- [x] verify the Pareto figure (performance vs. trainable param fraction and
   runtime) is generated as part of the artifact bundle
+- [x] upgrade benchmark to convergence-based training (10-15 epochs, early
+  stopping patience=5, StepLR gamma=0.9 — matching scGPT protocol)
+- [x] add comprehensive metrics (weighted F1, precision, recall, Cohen's kappa,
+  MCC, per-class F1/precision/recall)
+- [x] redesign figures for publication quality (error bars, confidence bands,
+  heatmap, radar chart, per-class F1 heatmap)
+- [x] document benchmark design rationale with literature references
+- [x] run and review the converged benchmark artifact bundle (264/264 runs
+  completed on 2026-03-25 — all 6 publication figures generated with narratives)
 - [ ] review the remaining annotation-pillar risks and either close them or carry them forward explicitly
 
 ## Risks / blockers
@@ -78,8 +104,9 @@ story before broadening to spatial, integration, and perturbation.
 - the current foundation fine-tuning path is still scGPT-only
 - cross-model parity is not solved in Milestone 1 and remains open work for
   Milestone 5
-- the full annotation matrix is currently too heavy for the present execution
-  path and timeout budget to complete the first full artifact freeze
+- ~~the full annotation matrix is currently too heavy for the present execution
+  path and timeout budget to complete the first full artifact freeze~~ (resolved
+  on 2026-03-25 with checkpoint + data prep caching)
 - the annotation story can still look more complete than it is if the public
   status is promoted before the first benchmark artifact freeze
 

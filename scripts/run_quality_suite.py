@@ -665,12 +665,12 @@ def _foundation_annotation_profile(profile: str) -> dict[str, int]:
         "max_cells": 64,
         "max_genes": 128,
         "min_gene_overlap": 64,
-        "head_epochs": 3,
-        "full_finetune_epochs": 2,
-        "lora_epochs": 2,
-        "adapter_epochs": 3,
-        "prefix_tuning_epochs": 3,
-        "ia3_epochs": 3,
+        "head_epochs": 15,
+        "full_finetune_epochs": 10,
+        "lora_epochs": 15,
+        "adapter_epochs": 15,
+        "prefix_tuning_epochs": 15,
+        "ia3_epochs": 15,
     }
 
 
@@ -1269,7 +1269,8 @@ def run_scgpt_annotation_strategy(
             epochs=int(strategy_spec["epochs"]),
             lr=float(strategy_spec["lr"]),
             device="auto",
-            early_stopping_patience=3,
+            early_stopping_patience=5,
+            lr_schedule_gamma=0.9,
             seed=seed,
         )
         trainer.fit(split.train, split.val)

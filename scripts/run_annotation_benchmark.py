@@ -172,6 +172,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip execution and rebuild the top-level bundle from existing per-run rows.",
     )
+    parser.add_argument(
+        "--figures-only",
+        action="store_true",
+        help="Regenerate figures from the saved all_results.csv (no row walk or model loading).",
+    )
     return parser.parse_args()
 
 
@@ -181,7 +186,13 @@ def _benchmark_profile(profile: str) -> tuple[str, dict[str, int]]:
         settings["token_max_length"] = 192
         return "quickstart", settings
     settings = dict(_foundation_annotation_profile("full"))
-    settings["token_max_length"] = 256
+    # Override quality-suite data limits for publication benchmarking.
+    # The quality-suite "full" profile uses max_cells=64 for gate checks;
+    # a real benchmark needs the full dataset to produce meaningful results.
+    settings["max_cells"] = 999_999  # effectively no subsampling
+    settings["max_genes"] = 999_999  # effectively no gene filtering
+    settings["min_gene_overlap"] = 50
+    settings["token_max_length"] = 512
     return "full", settings
 
 
@@ -516,8 +527,13 @@ def _report_payload(
             checkpoint_size_bytes if checkpoint_size_bytes is not None else 0
         ),
         "Macro F1": _scalar_value(metrics, "macro_f1"),
+        "Weighted F1": _scalar_value(metrics, "weighted_f1"),
         "Accuracy": _scalar_value(metrics, "accuracy"),
         "Balanced accuracy": _scalar_value(metrics, "balanced_accuracy"),
+        "Macro precision": _scalar_value(metrics, "macro_precision"),
+        "Macro recall": _scalar_value(metrics, "macro_recall"),
+        "Cohen kappa": _scalar_value(metrics, "cohen_kappa"),
+        "MCC": _scalar_value(metrics, "mcc"),
         "AUROC OVR": _scalar_value(metrics, "auroc_ovr"),
         "Low-label fraction": (
             split_plan.label_fraction if split_plan.label_fraction is not None else ""
@@ -613,7 +629,7 @@ def _run_pca_logistic_strategy(
         "batch_metrics_artifact": str(output_dir / "batch_metrics.csv"),
         "confusion_matrix_artifact": str(output_dir / "confusion_matrix.png"),
         "latent_umap_artifact": str(output_dir / "latent_umap.png"),
-        **{key: value for key, value in metrics.items() if isinstance(value, (int, float))},
+        **{key: value for key, value in metrics.items() if isinstance(value, (int, float, list))},
         **_batch_metric_summary(batch_metrics),
     }
 
@@ -697,7 +713,8 @@ def _run_scgpt_strategy(
             lr=lr,
             device="auto",
             mixed_precision=torch.cuda.is_available(),
-            early_stopping_patience=3,
+            early_stopping_patience=5,
+            lr_schedule_gamma=0.9,
             seed=seed,
         )
         trainer.fit(train_dataset, val_dataset)
@@ -787,7 +804,7 @@ def _run_scgpt_strategy(
         "batch_metrics_artifact": str(output_dir / "batch_metrics.csv"),
         "confusion_matrix_artifact": str(output_dir / "confusion_matrix.png"),
         "latent_umap_artifact": str(output_dir / "latent_umap.png"),
-        **{key: value for key, value in metrics.items() if isinstance(value, (int, float))},
+        **{key: value for key, value in metrics.items() if isinstance(value, (int, float, list))},
         **_batch_metric_summary(batch_metrics),
     }
 
@@ -1086,58 +1103,125 @@ def _ordered_frame(rows: list[dict[str, Any]]) -> pd.DataFrame:
     ).reset_index(drop=True)
 
 
+def _publication_style() -> None:
+    """Apply Nature-style matplotlib defaults for publication figures."""
+    from matplotlib import pyplot as plt
+
+    plt.rcParams.update(
+        {
+            "font.family": "sans-serif",
+            "font.size": 9,
+            "axes.titlesize": 10,
+            "axes.labelsize": 9,
+            "xtick.labelsize": 8,
+            "ytick.labelsize": 8,
+            "legend.fontsize": 7.5,
+            "figure.dpi": 300,
+            "savefig.dpi": 300,
+            "axes.spines.top": False,
+            "axes.spines.right": False,
+            "axes.linewidth": 0.8,
+            "xtick.major.width": 0.6,
+            "ytick.major.width": 0.6,
+        }
+    )
+
+
+STRATEGY_PALETTE = {
+    "PCA + logistic regression": "#999999",
+    "Frozen scGPT probe": "#4E79A7",
+    "scGPT head-only tuning": "#F28E2B",
+    "scGPT full fine-tuning": "#E15759",
+    "scGPT LoRA": "#76B7B2",
+    "scGPT adapters": "#59A14F",
+    "scGPT prefix tuning": "#EDC948",
+    "scGPT IA3": "#B07AA1",
+}
+
+
 def _save_performance_figure(frame: pd.DataFrame, output_dir: Path) -> pd.DataFrame:
     from matplotlib import pyplot as plt
 
+    _publication_style()
+    metric_cols = ["macro_f1", "weighted_f1", "balanced_accuracy"]
+    metric_labels = ["Macro F1", "Weighted F1", "Balanced Acc."]
+
     if frame.empty:
         summary = pd.DataFrame(
-            columns=["dataset", "model", "strategy", "macro_f1", "balanced_accuracy"]
+            columns=["dataset", "model", "strategy"] + metric_cols
         )
     else:
-        summary = (
-            frame.groupby(["dataset", "model", "strategy"], as_index=False)[
-                ["macro_f1", "balanced_accuracy"]
-            ]
+        agg_metrics = [c for c in metric_cols if c in frame.columns] + [
+            c for c in ["accuracy", "cohen_kappa", "mcc", "auroc_ovr"] if c in frame.columns
+        ]
+        group_mean = (
+            frame.groupby(["dataset", "model", "strategy"], as_index=False)[agg_metrics]
             .mean(numeric_only=True)
-            .sort_values(
-                ["dataset", "model"],
-                key=lambda column: (
-                    column.map(_strategy_sort_value) if column.name == "model" else column
-                ),
-            )
+        )
+        group_std = (
+            frame.groupby(["dataset", "model", "strategy"], as_index=False)[agg_metrics]
+            .std(numeric_only=True)
+            .rename(columns={c: f"{c}_std" for c in agg_metrics})
+        )
+        summary = group_mean.merge(
+            group_std, on=["dataset", "model", "strategy"], how="left"
+        ).fillna(0).sort_values(
+            ["dataset", "model"],
+            key=lambda column: (
+                column.map(_strategy_sort_value) if column.name == "model" else column
+            ),
         )
     summary.to_csv(output_dir / "annotation_performance.csv", index=False)
 
     datasets = list(summary["dataset"].drop_duplicates()) if not summary.empty else []
+    n_datasets = max(1, len(datasets))
     figure, axes = plt.subplots(
-        nrows=max(1, len(datasets)),
+        nrows=n_datasets,
         ncols=1,
-        figsize=(12, max(4, 4 * max(1, len(datasets)))),
+        figsize=(10, 3.5 * n_datasets),
         squeeze=False,
     )
+    metric_colors = ["#4E79A7", "#59A14F", "#F28E2B"]
     if not datasets:
         axes[0, 0].text(0.5, 0.5, "No full-label rows available", ha="center", va="center")
         axes[0, 0].axis("off")
     else:
+        available_metrics = [c for c in metric_cols if c in summary.columns]
+        available_labels = [metric_labels[metric_cols.index(c)] for c in available_metrics]
+        n_metrics = len(available_metrics)
+        bar_width = 0.8 / max(n_metrics, 1)
         for axis, dataset_name in zip(axes[:, 0], datasets, strict=False):
-            dataset_frame = summary[summary["dataset"] == dataset_name].copy()
-            dataset_frame = dataset_frame.sort_values(
-                "model",
-                key=lambda column: column.map(_strategy_sort_value),
+            df = summary[summary["dataset"] == dataset_name].copy()
+            df = df.sort_values("model", key=lambda c: c.map(_strategy_sort_value))
+            x = np.arange(len(df))
+            for i, (col, label) in enumerate(zip(available_metrics, available_labels)):
+                offset = (i - (n_metrics - 1) / 2) * bar_width
+                std_col = f"{col}_std"
+                yerr = df[std_col].values if std_col in df.columns else None
+                axis.bar(
+                    x + offset,
+                    df[col],
+                    width=bar_width * 0.9,
+                    label=label,
+                    yerr=yerr,
+                    capsize=2,
+                    error_kw={"linewidth": 0.8},
+                    color=metric_colors[i % len(metric_colors)],
+                    edgecolor="white",
+                    linewidth=0.5,
+                )
+            dataset_label = dataset_name.replace("_", " ").title()
+            axis.set_title(dataset_label, fontweight="bold")
+            axis.set_ylabel("Score")
+            axis.set_ylim(0.0, 1.05)
+            axis.set_xticks(x)
+            axis.set_xticklabels(
+                [s.replace("scGPT ", "") for s in df["strategy"]],
+                rotation=30,
+                ha="right",
             )
-            x_positions = np.arange(len(dataset_frame))
-            axis.bar(x_positions - 0.2, dataset_frame["macro_f1"], width=0.4, label="macro_f1")
-            axis.bar(
-                x_positions + 0.2,
-                dataset_frame["balanced_accuracy"],
-                width=0.4,
-                label="balanced_accuracy",
-            )
-            axis.set_title(dataset_name)
-            axis.set_ylim(0.0, 1.0)
-            axis.set_xticks(x_positions)
-            axis.set_xticklabels(dataset_frame["strategy"], rotation=35, ha="right")
-            axis.legend(frameon=False)
+            axis.legend(frameon=False, ncol=n_metrics, loc="upper right")
+            axis.axhline(y=1.0, color="#cccccc", linewidth=0.5, zorder=0)
     figure.tight_layout()
     figure.savefig(output_dir / "annotation_performance.png", dpi=300, bbox_inches="tight")
     figure.savefig(output_dir / "annotation_performance.svg", bbox_inches="tight")
@@ -1147,6 +1231,8 @@ def _save_performance_figure(frame: pd.DataFrame, output_dir: Path) -> pd.DataFr
 
 def _save_low_label_figure(frame: pd.DataFrame, output_dir: Path) -> pd.DataFrame:
     from matplotlib import pyplot as plt
+
+    _publication_style()
 
     if frame.empty:
         summary = pd.DataFrame(
@@ -1160,25 +1246,35 @@ def _save_low_label_figure(frame: pd.DataFrame, output_dir: Path) -> pd.DataFram
             ]
         )
     else:
-        summary = (
-            frame.groupby(["dataset", "label_fraction", "model", "strategy"], as_index=False)[
-                ["macro_f1", "balanced_accuracy"]
-            ]
+        group_mean = (
+            frame.groupby(
+                ["dataset", "label_fraction", "model", "strategy"], as_index=False
+            )[["macro_f1", "balanced_accuracy"]]
             .mean(numeric_only=True)
-            .sort_values(
-                ["dataset", "label_fraction", "model"],
-                key=lambda column: (
-                    column.map(_strategy_sort_value) if column.name == "model" else column
-                ),
-            )
+        )
+        group_std = (
+            frame.groupby(
+                ["dataset", "label_fraction", "model", "strategy"], as_index=False
+            )[["macro_f1", "balanced_accuracy"]]
+            .std(numeric_only=True)
+            .rename(columns={"macro_f1": "macro_f1_std", "balanced_accuracy": "balanced_accuracy_std"})
+        )
+        summary = group_mean.merge(
+            group_std, on=["dataset", "label_fraction", "model", "strategy"], how="left"
+        ).fillna(0).sort_values(
+            ["dataset", "label_fraction", "model"],
+            key=lambda column: (
+                column.map(_strategy_sort_value) if column.name == "model" else column
+            ),
         )
     summary.to_csv(output_dir / "annotation_low_label_curves.csv", index=False)
 
     datasets = list(summary["dataset"].drop_duplicates()) if not summary.empty else []
+    n_datasets = max(1, len(datasets))
     figure, axes = plt.subplots(
-        nrows=max(1, len(datasets)),
+        nrows=n_datasets,
         ncols=1,
-        figsize=(12, max(4, 4 * max(1, len(datasets)))),
+        figsize=(10, 3.5 * n_datasets),
         squeeze=False,
     )
     if not datasets:
@@ -1188,20 +1284,27 @@ def _save_low_label_figure(frame: pd.DataFrame, output_dir: Path) -> pd.DataFram
         for axis, dataset_name in zip(axes[:, 0], datasets, strict=False):
             dataset_frame = summary[summary["dataset"] == dataset_name]
             for model_name in dataset_frame["model"].drop_duplicates():
-                model_frame = dataset_frame[dataset_frame["model"] == model_name].sort_values(
+                mf = dataset_frame[dataset_frame["model"] == model_name].sort_values(
                     "label_fraction"
                 )
-                axis.plot(
-                    model_frame["label_fraction"],
-                    model_frame["macro_f1"],
-                    marker="o",
-                    label=MODEL_DISPLAY_NAMES.get(model_name, model_name),
-                )
-            axis.set_title(dataset_name)
-            axis.set_xlabel("label fraction")
-            axis.set_ylabel("macro_f1")
-            axis.set_ylim(0.0, 1.0)
-            axis.legend(frameon=False, fontsize=8)
+                display = MODEL_DISPLAY_NAMES.get(model_name, model_name)
+                color = STRATEGY_PALETTE.get(display, None)
+                fracs = mf["label_fraction"].values
+                means = mf["macro_f1"].values
+                stds = mf["macro_f1_std"].values if "macro_f1_std" in mf.columns else np.zeros_like(means)
+                short = display.replace("scGPT ", "").replace("PCA + logistic regression", "PCA+LR")
+                axis.plot(fracs, means, marker="o", markersize=5, linewidth=1.5, label=short, color=color)
+                axis.fill_between(fracs, means - stds, means + stds, alpha=0.15, color=color)
+            dataset_label = dataset_name.replace("_", " ").title()
+            axis.set_title(f"Label Efficiency: {dataset_label}", fontweight="bold")
+            axis.set_xlabel("Labeled fraction of training data")
+            axis.set_ylabel("Macro F1")
+            axis.set_ylim(0.0, 1.05)
+            axis.set_xlim(-0.005, max(0.12, float(dataset_frame["label_fraction"].max()) + 0.01))
+            axis.legend(
+                frameon=False, fontsize=6.5, loc="upper left",
+                bbox_to_anchor=(1.02, 1.0), borderaxespad=0,
+            )
     figure.tight_layout()
     figure.savefig(output_dir / "annotation_low_label_curves.png", dpi=300, bbox_inches="tight")
     figure.savefig(output_dir / "annotation_low_label_curves.svg", bbox_inches="tight")
@@ -1210,7 +1313,10 @@ def _save_low_label_figure(frame: pd.DataFrame, output_dir: Path) -> pd.DataFram
 
 
 def _save_cross_study_figure(frame: pd.DataFrame, output_dir: Path) -> pd.DataFrame:
+    import seaborn as sns
     from matplotlib import pyplot as plt
+
+    _publication_style()
 
     if frame.empty:
         summary = pd.DataFrame(
@@ -1231,36 +1337,42 @@ def _save_cross_study_figure(frame: pd.DataFrame, output_dir: Path) -> pd.DataFr
         )
     summary.to_csv(output_dir / "annotation_cross_study.csv", index=False)
 
-    folds = list(summary["cross_study_fold"].drop_duplicates()) if not summary.empty else []
-    figure, axes = plt.subplots(
-        nrows=max(1, len(folds)),
-        ncols=1,
-        figsize=(12, max(4, 4 * max(1, len(folds)))),
-        squeeze=False,
-    )
-    if not folds:
-        axes[0, 0].text(0.5, 0.5, "No cross-study rows available", ha="center", va="center")
-        axes[0, 0].axis("off")
+    if summary.empty:
+        figure, axis = plt.subplots(figsize=(8, 4))
+        axis.text(0.5, 0.5, "No cross-study rows available", ha="center", va="center")
+        axis.axis("off")
     else:
-        for axis, fold_name in zip(axes[:, 0], folds, strict=False):
-            fold_frame = summary[summary["cross_study_fold"] == fold_name].copy()
-            fold_frame = fold_frame.sort_values(
-                "model",
-                key=lambda column: column.map(_strategy_sort_value),
-            )
-            x_positions = np.arange(len(fold_frame))
-            axis.bar(x_positions - 0.2, fold_frame["macro_f1"], width=0.4, label="macro_f1")
-            axis.bar(
-                x_positions + 0.2,
-                fold_frame["balanced_accuracy"],
-                width=0.4,
-                label="balanced_accuracy",
-            )
-            axis.set_title(fold_name)
-            axis.set_ylim(0.0, 1.0)
-            axis.set_xticks(x_positions)
-            axis.set_xticklabels(fold_frame["strategy"], rotation=35, ha="right")
-            axis.legend(frameon=False, fontsize=8)
+        pivot = summary.pivot_table(
+            values="macro_f1", index="strategy", columns="cross_study_fold", aggfunc="mean"
+        )
+        order = [
+            MODEL_DISPLAY_NAMES[m]
+            for m in BENCHMARK_MODELS
+            if MODEL_DISPLAY_NAMES[m] in pivot.index
+        ]
+        pivot = pivot.reindex(order)
+        fold_labels = [f.replace("_", " ").title() for f in pivot.columns]
+        strategy_labels = [s.replace("scGPT ", "") for s in pivot.index]
+
+        figure, axis = plt.subplots(figsize=(6, max(3, 0.45 * len(pivot))))
+        sns.heatmap(
+            pivot,
+            annot=True,
+            fmt=".3f",
+            cmap="YlOrRd",
+            vmin=0.0,
+            vmax=1.0,
+            linewidths=0.5,
+            linecolor="white",
+            cbar_kws={"label": "Macro F1", "shrink": 0.8},
+            ax=axis,
+            xticklabels=fold_labels,
+            yticklabels=strategy_labels,
+        )
+        axis.set_title("Cross-Study Generalization (Macro F1)", fontweight="bold")
+        axis.set_xlabel("Held-out technology fold")
+        axis.set_ylabel("")
+        axis.tick_params(axis="y", rotation=0)
     figure.tight_layout()
     figure.savefig(output_dir / "annotation_cross_study.png", dpi=300, bbox_inches="tight")
     figure.savefig(output_dir / "annotation_cross_study.svg", bbox_inches="tight")
@@ -1270,6 +1382,9 @@ def _save_cross_study_figure(frame: pd.DataFrame, output_dir: Path) -> pd.DataFr
 
 def _save_pareto_figure(frame: pd.DataFrame, output_dir: Path) -> pd.DataFrame:
     from matplotlib import pyplot as plt
+    from matplotlib.lines import Line2D
+
+    _publication_style()
 
     if frame.empty:
         summary = pd.DataFrame(
@@ -1279,14 +1394,16 @@ def _save_pareto_figure(frame: pd.DataFrame, output_dir: Path) -> pd.DataFrame:
                 "strategy",
                 "macro_f1",
                 "trainable_parameters",
+                "total_parameters",
                 "runtime_sec",
             ]
         )
     else:
+        agg_cols = ["macro_f1", "trainable_parameters", "runtime_sec"]
+        if "total_parameters" in frame.columns:
+            agg_cols.append("total_parameters")
         summary = (
-            frame.groupby(["dataset", "model", "strategy"], as_index=False)[
-                ["macro_f1", "trainable_parameters", "runtime_sec"]
-            ]
+            frame.groupby(["dataset", "model", "strategy"], as_index=False)[agg_cols]
             .mean(numeric_only=True)
             .sort_values(
                 ["dataset", "model"],
@@ -1295,39 +1412,167 @@ def _save_pareto_figure(frame: pd.DataFrame, output_dir: Path) -> pd.DataFrame:
                 ),
             )
         )
+        if "total_parameters" in summary.columns:
+            total = summary["total_parameters"].replace(0, np.nan)
+            summary["trainable_fraction"] = (
+                summary["trainable_parameters"] / total
+            ).fillna(0)
+        else:
+            summary["trainable_fraction"] = 0.0
     summary.to_csv(output_dir / "annotation_pareto.csv", index=False)
 
-    figure, axes = plt.subplots(1, 2, figsize=(14, 5))
+    figure, axes = plt.subplots(1, 2, figsize=(12, 4.5))
     if summary.empty:
         for axis in axes:
             axis.text(0.5, 0.5, "No full-label rows available", ha="center", va="center")
             axis.axis("off")
     else:
-        for dataset_name in summary["dataset"].drop_duplicates():
-            dataset_frame = summary[summary["dataset"] == dataset_name]
-            axes[0].scatter(
-                dataset_frame["trainable_parameters"],
-                dataset_frame["macro_f1"],
-                label=dataset_name,
-            )
-            axes[1].scatter(
-                dataset_frame["runtime_sec"],
-                dataset_frame["macro_f1"],
-                label=dataset_name,
-            )
-        axes[0].set_xlabel("trainable_parameters")
-        axes[0].set_ylabel("macro_f1")
-        axes[0].set_title("Efficiency-performance Pareto")
-        axes[1].set_xlabel("runtime_sec")
-        axes[1].set_ylabel("macro_f1")
-        axes[1].set_title("Runtime-performance Pareto")
-        axes[0].legend(frameon=False)
-        axes[1].legend(frameon=False)
+        datasets = list(summary["dataset"].drop_duplicates())
+        markers = ["o", "s", "D", "^", "v"]
+        for di, dataset_name in enumerate(datasets):
+            df = summary[summary["dataset"] == dataset_name]
+            marker = markers[di % len(markers)]
+            for _, row in df.iterrows():
+                color = STRATEGY_PALETTE.get(row["strategy"], "#888888")
+                short = row["strategy"].replace("scGPT ", "").replace("PCA + logistic regression", "PCA+LR")
+                for ax_i, x_val, x_label in [
+                    (0, row["trainable_parameters"], "Trainable parameters"),
+                    (1, row["runtime_sec"], "Runtime (sec)"),
+                ]:
+                    size = max(30, min(300, row["runtime_sec"] * 3)) if ax_i == 0 else 50
+                    axes[ax_i].scatter(
+                        x_val, row["macro_f1"],
+                        s=size, c=color, marker=marker,
+                        edgecolors="black", linewidths=0.5, zorder=3,
+                    )
+                    axes[ax_i].annotate(
+                        short, (x_val, row["macro_f1"]),
+                        fontsize=6, ha="left", va="bottom",
+                        xytext=(4, 3), textcoords="offset points",
+                    )
+        axes[0].set_xscale("symlog", linthresh=1)
+        axes[0].set_xlabel("Trainable parameters")
+        axes[0].set_ylabel("Macro F1")
+        axes[0].set_title("Efficiency-Performance Trade-off", fontweight="bold")
+        axes[1].set_xlabel("Wall-clock runtime (sec)")
+        axes[1].set_ylabel("Macro F1")
+        axes[1].set_title("Runtime-Performance Trade-off", fontweight="bold")
+        if len(datasets) > 1:
+            legend_elements = [
+                Line2D([0], [0], marker=markers[i % len(markers)], color="w",
+                       markerfacecolor="#666666", markersize=7, label=d.replace("_", " "))
+                for i, d in enumerate(datasets)
+            ]
+            axes[0].legend(handles=legend_elements, frameon=False, fontsize=7)
     figure.tight_layout()
     figure.savefig(output_dir / "annotation_pareto.png", dpi=300, bbox_inches="tight")
     figure.savefig(output_dir / "annotation_pareto.svg", bbox_inches="tight")
     plt.close(figure)
     return summary
+
+
+def _save_radar_figure(frame: pd.DataFrame, output_dir: Path) -> None:
+    """Radar / spider chart comparing strategies across multiple metrics."""
+    from matplotlib import pyplot as plt
+
+    _publication_style()
+    radar_metrics = ["macro_f1", "weighted_f1", "balanced_accuracy", "macro_precision", "macro_recall"]
+    radar_labels = ["Macro F1", "Weighted F1", "Balanced Acc.", "Precision", "Recall"]
+    available = [m for m in radar_metrics if m in frame.columns]
+    if frame.empty or len(available) < 3:
+        return
+    labels_used = [radar_labels[radar_metrics.index(m)] for m in available]
+
+    summary = (
+        frame.groupby(["model", "strategy"], as_index=False)[available]
+        .mean(numeric_only=True)
+        .sort_values("model", key=lambda c: c.map(_strategy_sort_value))
+    )
+    n = len(available)
+    angles = np.linspace(0, 2 * np.pi, n, endpoint=False).tolist()
+    angles += angles[:1]
+
+    figure, axis = plt.subplots(figsize=(6, 6), subplot_kw={"polar": True})
+    axis.set_theta_offset(np.pi / 2)
+    axis.set_theta_direction(-1)
+    axis.set_xticks(angles[:-1])
+    axis.set_xticklabels(labels_used, fontsize=8)
+    axis.set_ylim(0, 1.0)
+    axis.set_yticks([0.2, 0.4, 0.6, 0.8, 1.0])
+    axis.set_yticklabels(["0.2", "0.4", "0.6", "0.8", "1.0"], fontsize=6, color="#666666")
+    axis.spines["polar"].set_visible(False)
+
+    for _, row in summary.iterrows():
+        values = [float(row[m]) for m in available]
+        values += values[:1]
+        color = STRATEGY_PALETTE.get(row["strategy"], None)
+        short = str(row["strategy"]).replace("scGPT ", "")
+        axis.plot(angles, values, linewidth=1.3, label=short, color=color)
+        axis.fill(angles, values, alpha=0.08, color=color)
+    axis.legend(loc="upper right", bbox_to_anchor=(1.35, 1.1), frameon=False, fontsize=7)
+    axis.set_title("Multi-Metric Strategy Comparison", fontweight="bold", pad=20)
+    figure.tight_layout()
+    figure.savefig(output_dir / "annotation_radar.png", dpi=300, bbox_inches="tight")
+    figure.savefig(output_dir / "annotation_radar.svg", bbox_inches="tight")
+    plt.close(figure)
+
+
+def _save_per_class_heatmap(frame: pd.DataFrame, output_dir: Path) -> None:
+    """Per-class F1 heatmap for the best seed of each strategy (full-label, first dataset)."""
+    import seaborn as sns
+    from matplotlib import pyplot as plt
+
+    _publication_style()
+    if frame.empty or "per_class_f1" not in frame.columns:
+        return
+    rows_with_pcf1 = frame.dropna(subset=["per_class_f1"])
+    if rows_with_pcf1.empty:
+        return
+    first_dataset = rows_with_pcf1["dataset"].iloc[0]
+    df = rows_with_pcf1[rows_with_pcf1["dataset"] == first_dataset]
+    best_rows = df.sort_values("macro_f1", ascending=False).drop_duplicates(subset=["model"])
+    best_rows = best_rows.sort_values("model", key=lambda c: c.map(_strategy_sort_value))
+
+    heatmap_data: dict[str, list[float]] = {}
+    max_classes = 0
+    for _, row in best_rows.iterrows():
+        pcf1 = row["per_class_f1"]
+        if isinstance(pcf1, str):
+            pcf1 = json.loads(pcf1)
+        if isinstance(pcf1, list):
+            short = str(row["strategy"]).replace("scGPT ", "")
+            heatmap_data[short] = [float(v) for v in pcf1]
+            max_classes = max(max_classes, len(pcf1))
+    if not heatmap_data or max_classes == 0:
+        return
+    for key in heatmap_data:
+        while len(heatmap_data[key]) < max_classes:
+            heatmap_data[key].append(float("nan"))
+
+    matrix = pd.DataFrame(heatmap_data).T
+    matrix.columns = [f"Class {i}" for i in range(max_classes)]
+
+    figure, axis = plt.subplots(figsize=(max(6, 0.5 * max_classes), max(3, 0.4 * len(matrix))))
+    sns.heatmap(
+        matrix,
+        annot=True,
+        fmt=".2f",
+        cmap="RdYlGn",
+        vmin=0.0,
+        vmax=1.0,
+        linewidths=0.3,
+        linecolor="white",
+        cbar_kws={"label": "F1 Score", "shrink": 0.8},
+        ax=axis,
+    )
+    dataset_label = first_dataset.replace("_", " ").title()
+    axis.set_title(f"Per-Class F1 Scores: {dataset_label}", fontweight="bold")
+    axis.set_ylabel("")
+    axis.tick_params(axis="y", rotation=0)
+    figure.tight_layout()
+    figure.savefig(output_dir / "annotation_per_class_f1.png", dpi=300, bbox_inches="tight")
+    figure.savefig(output_dir / "annotation_per_class_f1.svg", bbox_inches="tight")
+    plt.close(figure)
 
 
 def _ranking_columns(frame: pd.DataFrame) -> pd.DataFrame:
@@ -1565,6 +1810,9 @@ def run_annotation_benchmark(
     for directory in (full_dir, low_dir, cross_dir, figures_dir, tutorial_dir):
         directory.mkdir(parents=True, exist_ok=True)
 
+    # Save consolidated results file (single source of truth for all figures)
+    frame.to_csv(output_dir / "all_results.csv", index=False)
+
     full_label_frame.to_csv(full_dir / "strategy_metrics.csv", index=False)
     low_label_frame.to_csv(low_dir / "strategy_metrics.csv", index=False)
     cross_study_frame.to_csv(cross_dir / "strategy_metrics.csv", index=False)
@@ -1573,6 +1821,8 @@ def run_annotation_benchmark(
     _save_low_label_figure(low_label_frame, figures_dir)
     _save_cross_study_figure(cross_study_frame, figures_dir)
     _save_pareto_figure(full_label_frame, figures_dir)
+    _save_radar_figure(full_label_frame, figures_dir)
+    _save_per_class_heatmap(full_label_frame, figures_dir)
     _write_summary(
         full_label_frame=full_label_frame,
         low_label_frame=low_label_frame,
@@ -1599,8 +1849,36 @@ def run_annotation_benchmark(
     }
 
 
+def _regenerate_figures_from_csv(output_dir: Path) -> None:
+    """Regenerate all figures from the saved all_results.csv."""
+    csv_path = output_dir / "all_results.csv"
+    if not csv_path.exists():
+        raise FileNotFoundError(
+            f"No all_results.csv found at {csv_path}. "
+            "Run the benchmark or --aggregate-only first."
+        )
+    frame = pd.read_csv(csv_path)
+    full_label_frame = frame[frame["regime"] == "full_label"].copy() if not frame.empty else pd.DataFrame()
+    low_label_frame = frame[frame["regime"] == "low_label"].copy() if not frame.empty else pd.DataFrame()
+    cross_study_frame = frame[frame["regime"] == "cross_study"].copy() if not frame.empty else pd.DataFrame()
+
+    figures_dir = output_dir / "figures"
+    figures_dir.mkdir(parents=True, exist_ok=True)
+
+    _save_performance_figure(full_label_frame, figures_dir)
+    _save_low_label_figure(low_label_frame, figures_dir)
+    _save_cross_study_figure(cross_study_frame, figures_dir)
+    _save_pareto_figure(full_label_frame, figures_dir)
+    _save_radar_figure(full_label_frame, figures_dir)
+    _save_per_class_heatmap(full_label_frame, figures_dir)
+    print(f"Figures regenerated in {figures_dir}")
+
+
 def main() -> None:
     args = parse_args()
+    if args.figures_only:
+        _regenerate_figures_from_csv(args.output_dir)
+        return
     outputs = run_annotation_benchmark(
         datasets=tuple(args.dataset),
         regimes=tuple(args.regime),

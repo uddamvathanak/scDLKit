@@ -52,12 +52,12 @@ _ALLOWED_STRATEGIES = (
 _ALLOWED_STRATEGY_SET = {str(strategy) for strategy in _ALLOWED_STRATEGIES}
 _DEFAULT_STRATEGIES: tuple[AnnotationStrategy, ...] = ("frozen_probe", "head")
 _STRATEGY_EPOCHS: dict[str, int] = {
-    "head": 3,
-    "full_finetune": 2,
-    "lora": 2,
-    "adapter": 3,
-    "prefix_tuning": 3,
-    "ia3": 3,
+    "head": 15,
+    "full_finetune": 10,
+    "lora": 15,
+    "adapter": 15,
+    "prefix_tuning": 15,
+    "ia3": 15,
 }
 _STRATEGY_LR: dict[str, float] = {
     "head": 1e-3,
@@ -175,7 +175,17 @@ def _default_min_gene_overlap(adata: AnnData) -> int:
 
 def _classification_summary(metrics: Mapping[str, Any]) -> dict[str, float]:
     summary: dict[str, float] = {}
-    for key in ("accuracy", "macro_f1", "balanced_accuracy", "auroc_ovr"):
+    for key in (
+        "accuracy",
+        "macro_f1",
+        "weighted_f1",
+        "balanced_accuracy",
+        "macro_precision",
+        "macro_recall",
+        "cohen_kappa",
+        "mcc",
+        "auroc_ovr",
+    ):
         value = metrics.get(key)
         if isinstance(value, (float, int, np.floating, np.integer)):
             summary[key] = float(value)
@@ -444,7 +454,8 @@ class ScGPTAnnotationRunner:
             epochs=_STRATEGY_EPOCHS[strategy],
             lr=_STRATEGY_LR[strategy],
             device=self.device,
-            early_stopping_patience=2,
+            early_stopping_patience=5,
+            lr_schedule_gamma=0.9,
             seed=self.random_state,
         )
         trainer.fit(split.train, split.val)

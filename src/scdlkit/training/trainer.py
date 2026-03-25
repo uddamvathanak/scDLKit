@@ -45,6 +45,9 @@ class Trainer:
         Number of epochs without improvement before stopping early.
     checkpoint
         Whether to retain and restore the best checkpointed model state.
+    lr_schedule_gamma
+        Per-epoch multiplicative LR decay factor. ``None`` disables
+        scheduling. Following scGPT protocol, ``0.9`` is a good default.
     seed
         Random seed used for training.
     """
@@ -61,6 +64,7 @@ class Trainer:
         mixed_precision: bool = False,
         early_stopping_patience: int = 10,
         checkpoint: bool = True,
+        lr_schedule_gamma: float | None = None,
         seed: int = 42,
     ):
         self.model = model
@@ -72,6 +76,7 @@ class Trainer:
         self.mixed_precision = mixed_precision and self.device.type == "cuda"
         self.early_stopping_patience = early_stopping_patience
         self.checkpoint = checkpoint
+        self.lr_schedule_gamma = lr_schedule_gamma
         self.seed = seed
         self.history_: list[dict[str, float | int]] = []
         self.best_state_dict_: dict[str, Any] | None = None
@@ -140,6 +145,11 @@ class Trainer:
         )
 
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
+        scheduler = (
+            torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=self.lr_schedule_gamma)
+            if self.lr_schedule_gamma is not None
+            else None
+        )
         scaler = torch.amp.GradScaler("cuda", enabled=self.mixed_precision)
         stopper = EarlyStoppingState(best_loss=float("inf"), best_epoch=0)
 
@@ -156,6 +166,8 @@ class Trainer:
             else:
                 monitor_loss = float(train_metrics["loss"])
             self.history_.append(record)
+            if scheduler is not None:
+                scheduler.step()
             if monitor_loss < stopper.best_loss:
                 stopper.best_loss = monitor_loss
                 stopper.best_epoch = epoch

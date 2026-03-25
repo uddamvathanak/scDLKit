@@ -12,9 +12,13 @@ from sklearn.metrics import (
     accuracy_score,
     adjusted_rand_score,
     balanced_accuracy_score,
+    cohen_kappa_score,
     confusion_matrix,
     f1_score,
+    matthews_corrcoef,
     normalized_mutual_info_score,
+    precision_score,
+    recall_score,
     roc_auc_score,
     silhouette_score,
 )
@@ -79,11 +83,38 @@ def representation_metrics(
 def classification_metrics(y_true: np.ndarray, logits: np.ndarray) -> dict[str, object]:
     predicted = logits.argmax(axis=1)
     labels = np.arange(logits.shape[1]) if logits.ndim == 2 else None
+    zero_div = 0.0
     metrics: dict[str, object] = {
         "accuracy": float(accuracy_score(y_true, predicted)),
-        "macro_f1": float(f1_score(y_true, predicted, average="macro")),
+        "macro_f1": float(f1_score(y_true, predicted, average="macro", zero_division=zero_div)),
+        "weighted_f1": float(
+            f1_score(y_true, predicted, average="weighted", zero_division=zero_div)
+        ),
         "balanced_accuracy": float(balanced_accuracy_score(y_true, predicted)),
+        "macro_precision": float(
+            precision_score(y_true, predicted, average="macro", zero_division=zero_div)
+        ),
+        "macro_recall": float(
+            recall_score(y_true, predicted, average="macro", zero_division=zero_div)
+        ),
+        "weighted_precision": float(
+            precision_score(y_true, predicted, average="weighted", zero_division=zero_div)
+        ),
+        "weighted_recall": float(
+            recall_score(y_true, predicted, average="weighted", zero_division=zero_div)
+        ),
+        "cohen_kappa": float(cohen_kappa_score(y_true, predicted)),
+        "mcc": float(matthews_corrcoef(y_true, predicted)),
         "confusion_matrix": confusion_matrix(y_true, predicted, labels=labels).tolist(),
+        "per_class_f1": f1_score(
+            y_true, predicted, average=None, labels=labels, zero_division=zero_div
+        ).tolist(),
+        "per_class_precision": precision_score(
+            y_true, predicted, average=None, labels=labels, zero_division=zero_div
+        ).tolist(),
+        "per_class_recall": recall_score(
+            y_true, predicted, average=None, labels=labels, zero_division=zero_div
+        ).tolist(),
     }
     try:
         if logits.ndim == 2 and logits.shape[1] > 1 and len(np.unique(y_true)) > 1:
