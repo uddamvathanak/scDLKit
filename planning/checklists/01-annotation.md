@@ -1,6 +1,6 @@
 # Milestone 1: annotation pillar
 
-Status: in-progress
+Status: complete (pending figure review)
 
 ## Objective
 
@@ -97,18 +97,38 @@ story before broadening to spatial, integration, and perturbation.
 - [x] document benchmark design rationale with literature references
 - [x] run and review the converged benchmark artifact bundle (264/264 runs
   completed on 2026-03-25 — all 6 publication figures generated with narratives)
-- [ ] review the remaining annotation-pillar risks and either close them or carry them forward explicitly
+- [x] review the remaining annotation-pillar risks and either close them or
+  carry them forward explicitly (reviewed 2026-03-25)
 
 ## Risks / blockers
 
-- the current foundation fine-tuning path is still scGPT-only
-- cross-model parity is not solved in Milestone 1 and remains open work for
-  Milestone 5
+### Resolved
+
 - ~~the full annotation matrix is currently too heavy for the present execution
   path and timeout budget to complete the first full artifact freeze~~ (resolved
   on 2026-03-25 with checkpoint + data prep caching)
-- the annotation story can still look more complete than it is if the public
-  status is promoted before the first benchmark artifact freeze
+- ~~the annotation story can still look more complete than it is if the public
+  status is promoted before the first benchmark artifact freeze~~ (resolved:
+  264/264 benchmark runs complete with full artifact bundle, 6 publication
+  figures, and narrative documentation — promotion can now be evidence-based)
+
+### Carried forward
+
+- **scGPT-only**: the current foundation fine-tuning path is still scGPT-only.
+  This is intentional for Milestone 1. Cross-model parity (scVI, Geneformer,
+  etc.) is deferred to Milestone 5.
+- **PBMC dataset limitations**: `pbmc68k_reduced` uses noisy bulk-imputed labels
+  (~700 cells, 10 types), producing lower absolute scores (Macro F1 ~0.4-0.5).
+  The pancreas dataset is the primary evidence dataset. Consider replacing PBMC
+  with a higher-quality dataset in a future milestone if needed.
+- **Full fine-tuning catastrophic forgetting**: full fine-tuning consistently
+  collapses on both datasets (Macro F1 < 0.3 on pancreas). This is a known
+  limitation and a key part of the PEFT narrative, not a bug. Should be
+  explicitly discussed in the manuscript as motivation for PEFT.
+- **Gene vocabulary overlap**: scGPT checkpoint vocabulary matches only ~118
+  genes on PBMC. This limits foundation model performance on datasets with
+  non-overlapping gene panels. Future work should evaluate vocabulary-aware
+  preprocessing or newer checkpoints with broader vocabularies.
 
 ## Dependencies
 
