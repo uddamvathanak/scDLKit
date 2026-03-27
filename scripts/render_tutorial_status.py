@@ -41,6 +41,14 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Exit non-zero if any published tutorial notebook is missing.",
     )
+    parser.add_argument(
+        "--allow-missing-notebooks",
+        action="store_true",
+        help=(
+            "Allow partial notebook sets when checking; missing notebook files are "
+            "reported in the page but do not fail the command."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -155,7 +163,14 @@ def main() -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(render_status_markdown(records, issues), encoding="utf-8")
     print(args.output.read_text(encoding="utf-8"))
-    if args.check and issues:
+    blocking_issues = issues
+    if args.allow_missing_notebooks:
+        blocking_issues = [
+            issue
+            for issue in issues
+            if not issue.startswith("Missing published tutorial notebook ")
+        ]
+    if args.check and blocking_issues:
         return 1
     return 0
 

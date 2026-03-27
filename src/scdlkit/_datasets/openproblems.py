@@ -11,9 +11,9 @@ from typing import Literal, cast
 from urllib.error import URLError
 from urllib.request import urlopen
 
+import anndata as ad
 import numpy as np
 import pandas as pd
-import anndata as ad
 from anndata import AnnData, read_h5ad
 from scipy import sparse
 from sklearn.model_selection import train_test_split

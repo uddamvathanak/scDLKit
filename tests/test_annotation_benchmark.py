@@ -222,8 +222,12 @@ def test_run_annotation_benchmark_writes_required_outputs(
     assert (output_dir / "figures" / "annotation_radar.csv").exists()
     assert (output_dir / "figures" / "annotation_per_class_f1_pbmc68k_reduced.png").exists()
     assert (output_dir / "figures" / "annotation_per_class_f1_pbmc68k_reduced.csv").exists()
-    assert (output_dir / "figures" / "annotation_per_class_f1_openproblems_human_pancreas.png").exists()
-    assert (output_dir / "figures" / "annotation_per_class_f1_openproblems_human_pancreas.csv").exists()
+    assert (
+        output_dir / "figures" / "annotation_per_class_f1_openproblems_human_pancreas.png"
+    ).exists()
+    assert (
+        output_dir / "figures" / "annotation_per_class_f1_openproblems_human_pancreas.csv"
+    ).exists()
     assert (output_dir / "summary.md").exists()
     assert (output_dir / "summary.json").exists()
     assert (output_dir / "tutorial" / "manifest.json").exists()

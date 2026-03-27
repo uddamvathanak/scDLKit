@@ -49,7 +49,9 @@ Milestone numbers:
 
 ## Current objective
 
-M2: Representation transfer pillar
+Current milestone:
+
+- M2: Representation transfer pillar
 
 Why now:
 
@@ -59,7 +61,7 @@ Why now:
 - the current k-fold rerun and figure review are M1 hardening work, not a
   reason to keep M1 marked blocked
 
-Immediate deliverables:
+Top 3 deliverables:
 
 1. define the representation transfer task contract, dataset shortlist, and
    regime registry
@@ -68,7 +70,12 @@ Immediate deliverables:
 3. scope M2 outputs to fit the `Bioinformatics` manuscript target rather than a
    standalone feature demo
 
-Guardrails:
+Blockers:
+
+- none at the planning level; current risk is execution discipline rather than
+  missing milestone definition
+
+Exit criteria:
 
 - do not describe the full-toolkit paper as submission-ready before M2-M5 exist
 - do not reopen M1 status unless the reviewed evidence bundle regresses

@@ -10,10 +10,10 @@ from pathlib import Path
 from time import perf_counter
 from typing import Any
 
-import torch
 import matplotlib
 import numpy as np
 import pandas as pd
+import torch
 from anndata import AnnData
 from scipy import sparse
 from sklearn.decomposition import PCA
@@ -410,7 +410,11 @@ def _expected_row_count(
             total += n_folds * len(strategies)
         if "low_label" in regimes and "low_label" in spec.regimes:
             total += n_folds * len(label_fractions) * len(strategies)
-        if "cross_study" in regimes and "cross_study" in spec.regimes and spec.batch_key is not None:
+        if (
+            "cross_study" in regimes
+            and "cross_study" in spec.regimes
+            and spec.batch_key is not None
+        ):
             total += len(cross_study_folds) * len(strategies)
     return total
 
@@ -1297,7 +1301,9 @@ def _save_performance_figure(frame: pd.DataFrame, output_dir: Path) -> pd.DataFr
             df = summary[summary["dataset"] == dataset_name].copy()
             df = df.sort_values("model", key=lambda c: c.map(_strategy_sort_value))
             x = np.arange(len(df))
-            for i, (col, label) in enumerate(zip(available_metrics, available_labels)):
+            for i, (col, label) in enumerate(
+                zip(available_metrics, available_labels, strict=False)
+            ):
                 offset = (i - (n_metrics - 1) / 2) * bar_width
                 std_col = f"{col}_std"
                 yerr = df[std_col].values if std_col in df.columns else None
@@ -1360,7 +1366,12 @@ def _save_low_label_figure(frame: pd.DataFrame, output_dir: Path) -> pd.DataFram
                 ["dataset", "label_fraction", "model", "strategy"], as_index=False
             )[["macro_f1", "balanced_accuracy"]]
             .std(numeric_only=True)
-            .rename(columns={"macro_f1": "macro_f1_std", "balanced_accuracy": "balanced_accuracy_std"})
+            .rename(
+                columns={
+                    "macro_f1": "macro_f1_std",
+                    "balanced_accuracy": "balanced_accuracy_std",
+                }
+            )
         )
         summary = group_mean.merge(
             group_std, on=["dataset", "label_fraction", "model", "strategy"], how="left"
@@ -1391,12 +1402,26 @@ def _save_low_label_figure(frame: pd.DataFrame, output_dir: Path) -> pd.DataFram
                     "label_fraction"
                 )
                 display = MODEL_DISPLAY_NAMES.get(model_name, model_name)
-                color = STRATEGY_PALETTE.get(display, None)
+                color = STRATEGY_PALETTE.get(display)
                 fracs = mf["label_fraction"].values
                 means = mf["macro_f1"].values
-                stds = mf["macro_f1_std"].values if "macro_f1_std" in mf.columns else np.zeros_like(means)
-                short = display.replace("scGPT ", "").replace("PCA + logistic regression", "PCA+LR")
-                axis.plot(fracs, means, marker="o", markersize=5, linewidth=1.5, label=short, color=color)
+                stds = (
+                    mf["macro_f1_std"].values
+                    if "macro_f1_std" in mf.columns
+                    else np.zeros_like(means)
+                )
+                short = display.replace("scGPT ", "").replace(
+                    "PCA + logistic regression", "PCA+LR"
+                )
+                axis.plot(
+                    fracs,
+                    means,
+                    marker="o",
+                    markersize=5,
+                    linewidth=1.5,
+                    label=short,
+                    color=color,
+                )
                 axis.fill_between(fracs, means - stds, means + stds, alpha=0.15, color=color)
             dataset_label = dataset_name.replace("_", " ").title()
             axis.set_title(f"Label Efficiency: {dataset_label}", fontweight="bold")
@@ -1537,8 +1562,10 @@ def _save_pareto_figure(frame: pd.DataFrame, output_dir: Path) -> pd.DataFrame:
             marker = markers[di % len(markers)]
             for _, row in df.iterrows():
                 color = STRATEGY_PALETTE.get(row["strategy"], "#888888")
-                short = row["strategy"].replace("scGPT ", "").replace("PCA + logistic regression", "PCA+LR")
-                for ax_i, x_val, x_label in [
+                short = row["strategy"].replace("scGPT ", "").replace(
+                    "PCA + logistic regression", "PCA+LR"
+                )
+                for ax_i, x_val, _x_label in [
                     (0, row["trainable_parameters"], "Trainable parameters"),
                     (1, row["runtime_sec"], "Runtime (sec)"),
                 ]:
@@ -1579,7 +1606,13 @@ def _save_radar_figure(frame: pd.DataFrame, output_dir: Path) -> None:
     from matplotlib import pyplot as plt
 
     _publication_style()
-    radar_metrics = ["macro_f1", "weighted_f1", "balanced_accuracy", "macro_precision", "macro_recall"]
+    radar_metrics = [
+        "macro_f1",
+        "weighted_f1",
+        "balanced_accuracy",
+        "macro_precision",
+        "macro_recall",
+    ]
     radar_labels = ["Macro F1", "Weighted F1", "Balanced Acc.", "Precision", "Recall"]
     available = [m for m in radar_metrics if m in frame.columns]
     if frame.empty or len(available) < 3:
@@ -1608,7 +1641,7 @@ def _save_radar_figure(frame: pd.DataFrame, output_dir: Path) -> None:
     for _, row in summary.iterrows():
         values = [float(row[m]) for m in available]
         values += values[:1]
-        color = STRATEGY_PALETTE.get(row["strategy"], None)
+        color = STRATEGY_PALETTE.get(row["strategy"])
         short = str(row["strategy"]).replace("scGPT ", "")
         axis.plot(angles, values, linewidth=1.3, label=short, color=color)
         axis.fill(angles, values, alpha=0.08, color=color)
@@ -1980,9 +2013,14 @@ def _regenerate_figures_from_csv(output_dir: Path) -> None:
             "Run the benchmark or --aggregate-only first."
         )
     frame = pd.read_csv(csv_path)
-    full_label_frame = frame[frame["regime"] == "full_label"].copy() if not frame.empty else pd.DataFrame()
-    low_label_frame = frame[frame["regime"] == "low_label"].copy() if not frame.empty else pd.DataFrame()
-    cross_study_frame = frame[frame["regime"] == "cross_study"].copy() if not frame.empty else pd.DataFrame()
+    if frame.empty:
+        full_label_frame = pd.DataFrame()
+        low_label_frame = pd.DataFrame()
+        cross_study_frame = pd.DataFrame()
+    else:
+        full_label_frame = frame[frame["regime"] == "full_label"].copy()
+        low_label_frame = frame[frame["regime"] == "low_label"].copy()
+        cross_study_frame = frame[frame["regime"] == "cross_study"].copy()
 
     figures_dir = output_dir / "figures"
     figures_dir.mkdir(parents=True, exist_ok=True)

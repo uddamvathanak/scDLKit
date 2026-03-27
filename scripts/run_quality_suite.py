@@ -12,10 +12,10 @@ from pathlib import Path
 from time import perf_counter
 from typing import Any
 
-import torch
 import matplotlib
 import numpy as np
 import pandas as pd
+import torch
 from anndata import AnnData
 from scipy import sparse
 from sklearn.decomposition import PCA
@@ -549,7 +549,6 @@ def _save_trainable_annotation_checkpoint(
     metrics: dict[str, Any],
     strategy_config: dict[str, Any] | None,
 ) -> Path:
-    import torch
 
     checkpoint_dir = output_dir / "best_model"
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
