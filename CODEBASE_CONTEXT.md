@@ -80,7 +80,7 @@ scDLKit/
 
 ### Benchmarks
 
-- `benchmarks/annotation_spec.py` - Locked annotation benchmark specification: datasets (PBMC68k, Human Pancreas), regimes (full_label, low_label, cross_study), task spec with primary/secondary/efficiency metrics.
+- `benchmarks/annotation_spec.py` - Locked annotation benchmark specification: datasets (PBMC68k, Human Pancreas), regimes (full_label, low_label, cross_study) with 5-fold stratified CV, task spec with primary/secondary/efficiency metrics.
 
 ### Adapters
 
@@ -90,7 +90,7 @@ scDLKit/
 
 ## Scripts
 
-- `scripts/run_annotation_benchmark.py` - Full annotation benchmark: 8 strategies x 2 datasets x 3 regimes x 3 seeds = 264 runs. Generates publication-quality figures (performance bars with error bars, label efficiency curves with confidence bands, cross-study heatmap, Pareto scatter, radar chart, per-class F1 heatmap). Supports `--aggregate-only` (rebuild from row.json) and `--figures-only` (regenerate from all_results.csv).
+- `scripts/run_annotation_benchmark.py` - Full annotation benchmark: 8 strategies x 2 datasets x 3 regimes x 5-fold CV = 344 runs. Uses stratified k-fold cross-validation (default 5 folds). Generates publication-quality figures (performance bars with error bars, label efficiency curves with confidence bands, cross-study heatmap, Pareto scatter, radar chart, per-class F1 heatmap). Supports `--aggregate-only` (rebuild from row.json) and `--figures-only` (regenerate from all_results.csv).
 - `scripts/run_quality_suite.py` - Internal quality gates for CI and release checks. Defines training profiles (CI: 1 epoch, full: 10-15 epochs with patience=5).
 - `scripts/run_foundation_smoke.py` - Foundation model smoke tests.
 
@@ -98,6 +98,8 @@ scDLKit/
 
 - `planning/checklists/01-annotation.md` - Milestone 1 checklist (annotation pillar).
 - `planning/research/annotation_benchmark_design.md` - Research rationale for benchmark design based on published scGPT/PEFT papers.
+- `planning/research/annotation_benchmark_methods.md` - Plain-language methods documentation for the annotation benchmark (method-by-method explanation, randomness and reproducibility, manuscript language template).
+- `planning/research/bioinformatics_original_paper_target.md` - Target journal analysis: Bioinformatics Original Paper (7 pages, ~5000 words), requirements, style study, manuscript structure, submission checklist.
 
 ## Examples
 

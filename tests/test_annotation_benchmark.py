@@ -122,33 +122,52 @@ def test_run_annotation_benchmark_writes_required_outputs(
             "batch" if dataset_name == "openproblems_human_pancreas" else None,
         )
 
+    def fake_prepare_annotation_benchmark_adata(
+        dataset_name, adata, *, label_key, seed, profile
+    ):
+        return adata.copy()
+
+    def fake_prepare_scgpt_data_for_dataset(
+        dataset_name, benchmark_adata, *, label_key, profile_settings, pancreas_prepared
+    ):
+        return None
+
     def fake_run_single_benchmark(
         *,
         dataset_name: str,
         adata: AnnData,
+        prepared,
         label_key: str,
         batch_key: str | None,
         regime: str,
         split_plan,
         model_name: str,
+        fold: int,
         seed: int,
         profile_settings: dict[str, int],
         output_dir: Path,
+        resume: bool,
+        preloaded_state_dict=None,
     ) -> dict[str, object]:
+        per_class = [0.8, 0.7, 0.9]
         return {
             "dataset": dataset_name,
             "regime": regime,
             "model": model_name,
             "strategy": annotation_benchmark.MODEL_DISPLAY_NAMES[model_name],
-            "seed": seed,
+            "fold": fold,
             "label_fraction": split_plan.label_fraction,
             "cross_study_fold": split_plan.cross_study_fold,
             "accuracy": 0.8,
             "macro_f1": 0.75,
+            "weighted_f1": 0.76,
             "balanced_accuracy": 0.74,
+            "macro_precision": 0.73,
+            "macro_recall": 0.72,
             "runtime_sec": 1.5,
             "trainable_parameters": 0 if model_name == "pca_logistic_annotation" else 10,
             "checkpoint_size_bytes": 0,
+            "per_class_f1": per_class,
         }
 
     monkeypatch.setattr(
@@ -156,8 +175,23 @@ def test_run_annotation_benchmark_writes_required_outputs(
     )
     monkeypatch.setattr(
         annotation_benchmark,
+        "_prepare_annotation_benchmark_adata",
+        fake_prepare_annotation_benchmark_adata,
+    )
+    monkeypatch.setattr(
+        annotation_benchmark,
+        "_prepare_scgpt_data_for_dataset",
+        fake_prepare_scgpt_data_for_dataset,
+    )
+    monkeypatch.setattr(
+        annotation_benchmark,
         "_run_single_benchmark",
         fake_run_single_benchmark,
+    )
+    monkeypatch.setattr(
+        annotation_benchmark,
+        "load_scgpt_checkpoint_state_dict",
+        lambda *a, **kw: {},
     )
 
     output_dir = tmp_path / "annotation_pillar"
@@ -167,7 +201,8 @@ def test_run_annotation_benchmark_writes_required_outputs(
         profile="quickstart",
         strategies=("pca_logistic_annotation", "scgpt_head"),
         output_dir=output_dir,
-        seeds=(42,),
+        n_folds=2,
+        seed=42,
         label_fractions=(0.1,),
         cross_study_folds=("plate_like",),
     )
@@ -183,6 +218,24 @@ def test_run_annotation_benchmark_writes_required_outputs(
     assert (output_dir / "figures" / "annotation_cross_study.png").exists()
     assert (output_dir / "figures" / "annotation_pareto.csv").exists()
     assert (output_dir / "figures" / "annotation_pareto.png").exists()
+    assert (output_dir / "figures" / "annotation_radar.png").exists()
+    assert (output_dir / "figures" / "annotation_radar.csv").exists()
+    assert (output_dir / "figures" / "annotation_per_class_f1_pbmc68k_reduced.png").exists()
+    assert (output_dir / "figures" / "annotation_per_class_f1_pbmc68k_reduced.csv").exists()
+    assert (output_dir / "figures" / "annotation_per_class_f1_openproblems_human_pancreas.png").exists()
+    assert (output_dir / "figures" / "annotation_per_class_f1_openproblems_human_pancreas.csv").exists()
     assert (output_dir / "summary.md").exists()
     assert (output_dir / "summary.json").exists()
     assert (output_dir / "tutorial" / "manifest.json").exists()
+
+    # Verify summary.json reflects the actual strategy subset, not the full list
+    import json
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["strategies"] == ["pca_logistic_annotation", "scgpt_head"]
+
+    # Verify best_full_label_by_dataset uses CV mean (0.75), not single-fold max
+    for dataset_name in ("pbmc68k_reduced", "openproblems_human_pancreas"):
+        best = summary["best_full_label_by_dataset"][dataset_name]
+        assert best["macro_f1"] == 0.75, (
+            f"summary best macro_f1 should be CV mean (0.75), got {best['macro_f1']}"
+        )

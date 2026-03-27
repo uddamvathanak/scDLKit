@@ -1,6 +1,6 @@
 # Milestone 1: annotation pillar
 
-Status: complete (pending figure review)
+Status: complete
 
 ## Objective
 
@@ -45,11 +45,15 @@ story before broadening to spatial, integration, and perturbation.
   - LR scheduling: StepLR with gamma=0.9 per epoch (following scGPT protocol)
   - comprehensive metrics: added weighted F1, precision, recall, Cohen's kappa,
     MCC, per-class F1/precision/recall
-  - publication-quality figures: error bars (mean +/- std across seeds),
+  - publication-quality figures: error bars (mean +/- std across folds),
     confidence bands on low-label curves, cross-study heatmap,
     labeled Pareto scatter, radar chart, per-class F1 heatmap
   - benchmark design rationale documented in
     `planning/research/annotation_benchmark_design.md`
+- switched from 3-seed repeated random splits to **5-fold stratified
+  cross-validation** on `2026-03-26` — every cell appears in the test set
+  exactly once, giving an unbiased performance estimate. This is the standard
+  evaluation protocol for all milestones.
 
 ## Exit artifacts
 
@@ -97,6 +101,10 @@ story before broadening to spatial, integration, and perturbation.
 - [x] document benchmark design rationale with literature references
 - [x] run and review the converged benchmark artifact bundle (264/264 runs
   completed on 2026-03-25 — all 6 publication figures generated with narratives)
+- [x] switch to 5-fold stratified cross-validation (from 3-seed repeated random
+  splits) — every cell appears in the test set exactly once
+- [x] run and review the k-fold CV benchmark (344/344 runs completed on
+  2026-03-26 — all 7 publication figures generated with 5-fold error bars)
 - [x] review the remaining annotation-pillar risks and either close them or
   carry them forward explicitly (reviewed 2026-03-25)
 

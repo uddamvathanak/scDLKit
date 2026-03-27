@@ -101,6 +101,7 @@ class SplitPlan:
     train_indices: np.ndarray
     val_indices: np.ndarray
     test_indices: np.ndarray
+    fold: int | None = None
     label_fraction: float | None = None
     cross_study_fold: str | None = None
 
@@ -141,11 +142,16 @@ def parse_args() -> argparse.Namespace:
         help="Artifact output directory.",
     )
     parser.add_argument(
-        "--seeds",
-        nargs="*",
+        "--n-folds",
         type=int,
-        default=ANNOTATION_REGIME_SPECS["full_label"].seeds,
-        help="Override the default benchmark seeds.",
+        default=ANNOTATION_REGIME_SPECS["full_label"].n_folds,
+        help="Number of cross-validation folds (default 5).",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=ANNOTATION_REGIME_SPECS["full_label"].seed,
+        help="Base random seed for reproducibility (default 42).",
     )
     parser.add_argument(
         "--label-fractions",
@@ -281,6 +287,46 @@ def build_full_label_split(
     return SplitPlan(train_indices=train_idx, val_indices=val_idx, test_indices=test_idx)
 
 
+def build_kfold_splits(
+    adata: AnnData,
+    *,
+    label_key: str,
+    n_folds: int = 5,
+    seed: int = 42,
+    val_size: float = 0.15,
+) -> list[SplitPlan]:
+    """Build stratified k-fold cross-validation splits.
+
+    Each fold holds out ~1/k of the data as the test set, then splits the
+    remaining data into train and validation (val_size fraction of remaining).
+    """
+    from sklearn.model_selection import StratifiedKFold
+
+    labels, _ = _encode_labels(adata.obs[label_key])
+    indices = np.arange(adata.n_obs, dtype=np.int64)
+    skf = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=seed)
+    splits: list[SplitPlan] = []
+    for fold_index, (train_val_idx, test_idx) in enumerate(skf.split(indices, labels)):
+        train_val_idx = np.sort(np.asarray(train_val_idx, dtype=np.int64))
+        test_idx = np.sort(np.asarray(test_idx, dtype=np.int64))
+        train_val_labels = labels[train_val_idx]
+        train_idx, val_idx = _safe_split(
+            train_val_idx,
+            train_val_labels,
+            train_size=1.0 - val_size,
+            seed=seed + fold_index,
+        )
+        splits.append(
+            SplitPlan(
+                train_indices=train_idx,
+                val_indices=val_idx,
+                test_indices=test_idx,
+                fold=fold_index,
+            )
+        )
+    return splits
+
+
 def build_low_label_split(
     full_split: SplitPlan,
     adata: AnnData,
@@ -304,6 +350,7 @@ def build_low_label_split(
         train_indices=subsampled_train,
         val_indices=np.asarray(full_split.val_indices, dtype=np.int64),
         test_indices=np.asarray(full_split.test_indices, dtype=np.int64),
+        fold=full_split.fold,
         label_fraction=label_fraction,
     )
 
@@ -352,7 +399,7 @@ def _expected_row_count(
     datasets: tuple[str, ...],
     regimes: tuple[str, ...],
     strategies: tuple[str, ...],
-    seeds: tuple[int, ...],
+    n_folds: int,
     label_fractions: tuple[float, ...],
     cross_study_folds: tuple[str, ...],
 ) -> int:
@@ -360,11 +407,11 @@ def _expected_row_count(
     for dataset_name in datasets:
         spec = ANNOTATION_DATASET_SPECS[dataset_name]
         if "full_label" in regimes and "full_label" in spec.regimes:
-            total += len(seeds) * len(strategies)
+            total += n_folds * len(strategies)
         if "low_label" in regimes and "low_label" in spec.regimes:
-            total += len(seeds) * len(label_fractions) * len(strategies)
+            total += n_folds * len(label_fractions) * len(strategies)
         if "cross_study" in regimes and "cross_study" in spec.regimes and spec.batch_key is not None:
-            total += len(cross_study_folds) * len(seeds) * len(strategies)
+            total += len(cross_study_folds) * len(strategies)
     return total
 
 
@@ -390,11 +437,11 @@ def _run_output_dir(
     regime: str,
     dataset_name: str,
     model_name: str,
-    seed: int,
+    fold: int,
     label_fraction: float | None,
     cross_study_fold: str | None,
 ) -> Path:
-    parts = [output_dir, "runs", regime, dataset_name, model_name, f"seed_{seed}"]
+    parts = [output_dir, "runs", regime, dataset_name, model_name, f"fold_{fold}"]
     if label_fraction is not None:
         parts.append(f"fraction_{label_fraction:.2f}".replace(".", "p"))
     if cross_study_fold is not None:
@@ -549,6 +596,7 @@ def _run_pca_logistic_strategy(
     batch_key: str | None,
     split_plan: SplitPlan,
     dataset_name: str,
+    fold: int,
     seed: int,
     output_dir: Path,
 ) -> dict[str, Any]:
@@ -616,7 +664,7 @@ def _run_pca_logistic_strategy(
         "regime": "",
         "model": "pca_logistic_annotation",
         "strategy": MODEL_DISPLAY_NAMES["pca_logistic_annotation"],
-        "seed": seed,
+        "fold": fold,
         "label_fraction": split_plan.label_fraction,
         "cross_study_fold": split_plan.cross_study_fold,
         "runtime_sec": runtime_sec,
@@ -643,6 +691,7 @@ def _run_scgpt_strategy(
     split_plan: SplitPlan,
     dataset_name: str,
     model_name: str,
+    fold: int,
     seed: int,
     profile_settings: dict[str, int],
     output_dir: Path,
@@ -791,7 +840,7 @@ def _run_scgpt_strategy(
         "regime": "",
         "model": model_name,
         "strategy": MODEL_DISPLAY_NAMES[model_name],
-        "seed": seed,
+        "fold": fold,
         "label_fraction": split_plan.label_fraction,
         "cross_study_fold": split_plan.cross_study_fold,
         "runtime_sec": runtime_sec,
@@ -819,6 +868,7 @@ def _run_single_benchmark(
     regime: str,
     split_plan: SplitPlan,
     model_name: str,
+    fold: int,
     seed: int,
     profile_settings: dict[str, int],
     output_dir: Path,
@@ -830,7 +880,7 @@ def _run_single_benchmark(
         regime=regime,
         dataset_name=dataset_name,
         model_name=model_name,
-        seed=seed,
+        fold=fold,
         label_fraction=split_plan.label_fraction,
         cross_study_fold=split_plan.cross_study_fold,
     )
@@ -838,6 +888,8 @@ def _run_single_benchmark(
         existing_row = _load_run_row(run_dir)
         if existing_row is not None:
             return existing_row
+    # Derive a per-fold seed for reproducible model init and training
+    fold_seed = seed + fold
     if model_name == "pca_logistic_annotation":
         row = _run_pca_logistic_strategy(
             adata=adata,
@@ -845,7 +897,8 @@ def _run_single_benchmark(
             batch_key=batch_key,
             split_plan=split_plan,
             dataset_name=dataset_name,
-            seed=seed,
+            fold=fold,
+            seed=fold_seed,
             output_dir=run_dir,
         )
     else:
@@ -870,7 +923,8 @@ def _run_single_benchmark(
             split_plan=split_plan,
             dataset_name=dataset_name,
             model_name=model_name,
-            seed=seed,
+            fold=fold,
+            seed=fold_seed,
             profile_settings=profile_settings,
             output_dir=run_dir,
             preloaded_state_dict=preloaded_state_dict,
@@ -880,7 +934,7 @@ def _run_single_benchmark(
     return row
 
 
-def _prepare_scgpt_data_for_seed(
+def _prepare_scgpt_data_for_dataset(
     dataset_name: str,
     benchmark_adata: AnnData,
     *,
@@ -888,10 +942,10 @@ def _prepare_scgpt_data_for_seed(
     profile_settings: dict[str, int],
     pancreas_prepared: ScGPTPreparedData | None,
 ) -> ScGPTPreparedData | None:
-    """Return prepared scGPT data for a single seed's adata, computing it once if needed."""
-    if dataset_name == "openproblems_human_pancreas":
+    """Return prepared scGPT data for a dataset, computing it once if needed."""
+    if dataset_name == "openproblems_human_pancreas" and pancreas_prepared is not None:
         return pancreas_prepared
-    seed_prepared = prepare_scgpt_data(
+    dataset_prepared = prepare_scgpt_data(
         benchmark_adata,
         checkpoint="whole-human",
         label_key=label_key,
@@ -900,7 +954,7 @@ def _prepare_scgpt_data_for_seed(
         min_gene_overlap=profile_settings["min_gene_overlap"],
     )
     return _truncate_prepared_data(
-        seed_prepared,
+        dataset_prepared,
         max_token_length=profile_settings["token_max_length"],
     )
 
@@ -912,7 +966,8 @@ def _collect_full_label_rows(
     prepared: ScGPTPreparedData | None,
     label_key: str,
     batch_key: str | None,
-    seeds: tuple[int, ...],
+    n_folds: int,
+    seed: int,
     strategies: tuple[str, ...],
     output_dir: Path,
     profile_settings: dict[str, int],
@@ -922,26 +977,31 @@ def _collect_full_label_rows(
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     scgpt_strategies = [s for s in strategies if s != "pca_logistic_annotation"]
-    for seed in seeds:
-        benchmark_adata = _prepare_annotation_benchmark_adata(
+    benchmark_adata = _prepare_annotation_benchmark_adata(
+        dataset_name,
+        adata,
+        label_key=label_key,
+        seed=seed,
+        profile=profile,
+    )
+    benchmark_prepared = (
+        _prepare_scgpt_data_for_dataset(
             dataset_name,
-            adata,
+            benchmark_adata,
             label_key=label_key,
-            seed=seed,
-            profile=profile,
+            profile_settings=profile_settings,
+            pancreas_prepared=prepared,
         )
-        benchmark_prepared = (
-            _prepare_scgpt_data_for_seed(
-                dataset_name,
-                benchmark_adata,
-                label_key=label_key,
-                profile_settings=profile_settings,
-                pancreas_prepared=prepared,
-            )
-            if scgpt_strategies
-            else None
-        )
-        split_plan = build_full_label_split(benchmark_adata, label_key=label_key, seed=seed)
+        if scgpt_strategies
+        else None
+    )
+    fold_splits = build_kfold_splits(
+        benchmark_adata,
+        label_key=label_key,
+        n_folds=n_folds,
+        seed=seed,
+    )
+    for split_plan in fold_splits:
         for model_name in strategies:
             rows.append(
                 _run_single_benchmark(
@@ -953,6 +1013,7 @@ def _collect_full_label_rows(
                     regime="full_label",
                     split_plan=split_plan,
                     model_name=model_name,
+                    fold=split_plan.fold,
                     seed=seed,
                     profile_settings=profile_settings,
                     output_dir=output_dir,
@@ -970,7 +1031,8 @@ def _collect_low_label_rows(
     prepared: ScGPTPreparedData | None,
     label_key: str,
     batch_key: str | None,
-    seeds: tuple[int, ...],
+    n_folds: int,
+    seed: int,
     label_fractions: tuple[float, ...],
     strategies: tuple[str, ...],
     output_dir: Path,
@@ -981,33 +1043,38 @@ def _collect_low_label_rows(
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     scgpt_strategies = [s for s in strategies if s != "pca_logistic_annotation"]
-    for seed in seeds:
-        benchmark_adata = _prepare_annotation_benchmark_adata(
+    benchmark_adata = _prepare_annotation_benchmark_adata(
+        dataset_name,
+        adata,
+        label_key=label_key,
+        seed=seed,
+        profile=profile,
+    )
+    benchmark_prepared = (
+        _prepare_scgpt_data_for_dataset(
             dataset_name,
-            adata,
+            benchmark_adata,
             label_key=label_key,
-            seed=seed,
-            profile=profile,
+            profile_settings=profile_settings,
+            pancreas_prepared=prepared,
         )
-        benchmark_prepared = (
-            _prepare_scgpt_data_for_seed(
-                dataset_name,
-                benchmark_adata,
-                label_key=label_key,
-                profile_settings=profile_settings,
-                pancreas_prepared=prepared,
-            )
-            if scgpt_strategies
-            else None
-        )
-        full_split = build_full_label_split(benchmark_adata, label_key=label_key, seed=seed)
+        if scgpt_strategies
+        else None
+    )
+    fold_splits = build_kfold_splits(
+        benchmark_adata,
+        label_key=label_key,
+        n_folds=n_folds,
+        seed=seed,
+    )
+    for full_split in fold_splits:
         for label_fraction in label_fractions:
             split_plan = build_low_label_split(
                 full_split,
                 benchmark_adata,
                 label_key=label_key,
                 label_fraction=label_fraction,
-                seed=seed,
+                seed=seed + full_split.fold,
             )
             for model_name in strategies:
                 rows.append(
@@ -1020,6 +1087,7 @@ def _collect_low_label_rows(
                         regime="low_label",
                         split_plan=split_plan,
                         model_name=model_name,
+                        fold=split_plan.fold,
                         seed=seed,
                         profile_settings=profile_settings,
                         output_dir=output_dir,
@@ -1037,7 +1105,7 @@ def _collect_cross_study_rows(
     prepared: ScGPTPreparedData | None,
     label_key: str,
     batch_key: str,
-    seeds: tuple[int, ...],
+    seed: int,
     fold_names: tuple[str, ...],
     strategies: tuple[str, ...],
     output_dir: Path,
@@ -1049,34 +1117,34 @@ def _collect_cross_study_rows(
     available_folds = {
         fold.name: fold for fold in ANNOTATION_REGIME_SPECS["cross_study"].cross_study_folds
     }
-    for fold_name in fold_names:
+    for fold_index, fold_name in enumerate(fold_names):
         fold = available_folds[fold_name]
-        for seed in seeds:
-            split_plan = build_cross_study_split(
-                adata,
-                label_key=label_key,
-                batch_key=batch_key,
-                fold=fold,
-                seed=seed,
-            )
-            for model_name in strategies:
-                rows.append(
-                    _run_single_benchmark(
-                        dataset_name=dataset_name,
-                        adata=adata,
-                        prepared=prepared,
-                        label_key=label_key,
-                        batch_key=batch_key,
-                        regime="cross_study",
-                        split_plan=split_plan,
-                        model_name=model_name,
-                        seed=seed,
-                        profile_settings=profile_settings,
-                        output_dir=output_dir,
-                        resume=resume,
-                        preloaded_state_dict=preloaded_state_dict,
-                    )
+        split_plan = build_cross_study_split(
+            adata,
+            label_key=label_key,
+            batch_key=batch_key,
+            fold=fold,
+            seed=seed,
+        )
+        for model_name in strategies:
+            rows.append(
+                _run_single_benchmark(
+                    dataset_name=dataset_name,
+                    adata=adata,
+                    prepared=prepared,
+                    label_key=label_key,
+                    batch_key=batch_key,
+                    regime="cross_study",
+                    split_plan=split_plan,
+                    model_name=model_name,
+                    fold=fold_index,
+                    seed=seed,
+                    profile_settings=profile_settings,
+                    output_dir=output_dir,
+                    resume=resume,
+                    preloaded_state_dict=preloaded_state_dict,
                 )
+            )
     return rows
 
 
@@ -1092,12 +1160,47 @@ def _collect_existing_rows(output_dir: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def _row_identity(row: dict[str, Any]) -> tuple[Any, ...]:
+    """Build a stable run identity for merging in-memory and on-disk rows."""
+    return (
+        row.get("dataset"),
+        row.get("regime"),
+        row.get("model"),
+        row.get("fold"),
+        row.get("label_fraction"),
+        row.get("cross_study_fold"),
+    )
+
+
+def _merge_rows(
+    in_memory_rows: list[dict[str, Any]],
+    existing_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Merge rows collected in the current process with saved row.json outputs.
+
+    Saved rows are treated as authoritative when the same run appears in both
+    lists, which matches the normal benchmark path where each run persists a
+    `row.json` file before aggregation.
+    """
+    merged: dict[tuple[Any, ...], dict[str, Any]] = {}
+    for row in in_memory_rows:
+        merged[_row_identity(row)] = row
+    for row in existing_rows:
+        merged[_row_identity(row)] = row
+    return list(merged.values())
+
+
 def _ordered_frame(rows: list[dict[str, Any]]) -> pd.DataFrame:
     if not rows:
         return pd.DataFrame()
     frame = pd.DataFrame.from_records(rows)
+    sort_cols = ["dataset", "regime", "cross_study_fold", "label_fraction", "model"]
+    if "fold" in frame.columns:
+        sort_cols.append("fold")
+    elif "seed" in frame.columns:
+        sort_cols.append("seed")
     return frame.sort_values(
-        ["dataset", "regime", "cross_study_fold", "label_fraction", "model", "seed"],
+        sort_cols,
         key=lambda column: column.map(_strategy_sort_value) if column.name == "model" else column,
         kind="mergesort",
     ).reset_index(drop=True)
@@ -1514,11 +1617,12 @@ def _save_radar_figure(frame: pd.DataFrame, output_dir: Path) -> None:
     figure.tight_layout()
     figure.savefig(output_dir / "annotation_radar.png", dpi=300, bbox_inches="tight")
     figure.savefig(output_dir / "annotation_radar.svg", bbox_inches="tight")
+    summary.to_csv(output_dir / "annotation_radar.csv", index=False)
     plt.close(figure)
 
 
 def _save_per_class_heatmap(frame: pd.DataFrame, output_dir: Path) -> None:
-    """Per-class F1 heatmap for the best seed of each strategy (full-label, first dataset)."""
+    """Per-class F1 heatmap for the best seed of each strategy (full-label, per dataset)."""
     import seaborn as sns
     from matplotlib import pyplot as plt
 
@@ -1528,51 +1632,57 @@ def _save_per_class_heatmap(frame: pd.DataFrame, output_dir: Path) -> None:
     rows_with_pcf1 = frame.dropna(subset=["per_class_f1"])
     if rows_with_pcf1.empty:
         return
-    first_dataset = rows_with_pcf1["dataset"].iloc[0]
-    df = rows_with_pcf1[rows_with_pcf1["dataset"] == first_dataset]
-    best_rows = df.sort_values("macro_f1", ascending=False).drop_duplicates(subset=["model"])
-    best_rows = best_rows.sort_values("model", key=lambda c: c.map(_strategy_sort_value))
 
-    heatmap_data: dict[str, list[float]] = {}
-    max_classes = 0
-    for _, row in best_rows.iterrows():
-        pcf1 = row["per_class_f1"]
-        if isinstance(pcf1, str):
-            pcf1 = json.loads(pcf1)
-        if isinstance(pcf1, list):
-            short = str(row["strategy"]).replace("scGPT ", "")
-            heatmap_data[short] = [float(v) for v in pcf1]
-            max_classes = max(max_classes, len(pcf1))
-    if not heatmap_data or max_classes == 0:
-        return
-    for key in heatmap_data:
-        while len(heatmap_data[key]) < max_classes:
-            heatmap_data[key].append(float("nan"))
+    dataset_names = list(rows_with_pcf1["dataset"].unique())
+    for dataset_name in dataset_names:
+        df = rows_with_pcf1[rows_with_pcf1["dataset"] == dataset_name]
+        best_rows = df.sort_values("macro_f1", ascending=False).drop_duplicates(subset=["model"])
+        best_rows = best_rows.sort_values("model", key=lambda c: c.map(_strategy_sort_value))
 
-    matrix = pd.DataFrame(heatmap_data).T
-    matrix.columns = [f"Class {i}" for i in range(max_classes)]
+        heatmap_data: dict[str, list[float]] = {}
+        max_classes = 0
+        for _, row in best_rows.iterrows():
+            pcf1 = row["per_class_f1"]
+            if isinstance(pcf1, str):
+                pcf1 = json.loads(pcf1)
+            if isinstance(pcf1, list):
+                short = str(row["strategy"]).replace("scGPT ", "")
+                heatmap_data[short] = [float(v) for v in pcf1]
+                max_classes = max(max_classes, len(pcf1))
+        if not heatmap_data or max_classes == 0:
+            continue
+        for key in heatmap_data:
+            while len(heatmap_data[key]) < max_classes:
+                heatmap_data[key].append(float("nan"))
 
-    figure, axis = plt.subplots(figsize=(max(6, 0.5 * max_classes), max(3, 0.4 * len(matrix))))
-    sns.heatmap(
-        matrix,
-        annot=True,
-        fmt=".2f",
-        cmap="RdYlGn",
-        vmin=0.0,
-        vmax=1.0,
-        linewidths=0.3,
-        linecolor="white",
-        cbar_kws={"label": "F1 Score", "shrink": 0.8},
-        ax=axis,
-    )
-    dataset_label = first_dataset.replace("_", " ").title()
-    axis.set_title(f"Per-Class F1 Scores: {dataset_label}", fontweight="bold")
-    axis.set_ylabel("")
-    axis.tick_params(axis="y", rotation=0)
-    figure.tight_layout()
-    figure.savefig(output_dir / "annotation_per_class_f1.png", dpi=300, bbox_inches="tight")
-    figure.savefig(output_dir / "annotation_per_class_f1.svg", bbox_inches="tight")
-    plt.close(figure)
+        matrix = pd.DataFrame(heatmap_data).T
+        matrix.columns = [f"Class {i}" for i in range(max_classes)]
+
+        figure, axis = plt.subplots(figsize=(max(6, 0.5 * max_classes), max(3, 0.4 * len(matrix))))
+        sns.heatmap(
+            matrix,
+            annot=True,
+            fmt=".2f",
+            cmap="RdYlGn",
+            vmin=0.0,
+            vmax=1.0,
+            linewidths=0.3,
+            linecolor="white",
+            cbar_kws={"label": "F1 Score", "shrink": 0.8},
+            ax=axis,
+        )
+        dataset_label = dataset_name.replace("_", " ").title()
+        axis.set_title(f"Per-Class F1 Scores: {dataset_label}", fontweight="bold")
+        axis.set_ylabel("")
+        axis.tick_params(axis="y", rotation=0)
+        figure.tight_layout()
+        suffix = f"_{dataset_name}" if len(dataset_names) > 1 else ""
+        figure.savefig(
+            output_dir / f"annotation_per_class_f1{suffix}.png", dpi=300, bbox_inches="tight"
+        )
+        figure.savefig(output_dir / f"annotation_per_class_f1{suffix}.svg", bbox_inches="tight")
+        matrix.to_csv(output_dir / f"annotation_per_class_f1{suffix}.csv")
+        plt.close(figure)
 
 
 def _ranking_columns(frame: pd.DataFrame) -> pd.DataFrame:
@@ -1591,21 +1701,33 @@ def _write_summary(
     output_dir: Path,
     completed_rows: int,
     expected_rows: int,
+    strategies: tuple[str, ...] = BENCHMARK_MODELS,
 ) -> dict[str, Any]:
     full_bests: dict[str, dict[str, Any]] = {}
     if not full_label_frame.empty:
         for dataset_name in full_label_frame["dataset"].drop_duplicates():
-            dataset_frame = _ranking_columns(
-                full_label_frame[full_label_frame["dataset"] == dataset_name]
-            )
+            dataset_frame = full_label_frame[full_label_frame["dataset"] == dataset_name]
             if dataset_frame.empty:
                 continue
-            best = dataset_frame.iloc[0]
+            # Aggregate across folds to get per-strategy mean (not single-fold max)
+            agg_cols = [
+                c for c in ["macro_f1", "balanced_accuracy", "accuracy",
+                            "trainable_parameters", "runtime_sec"]
+                if c in dataset_frame.columns
+            ]
+            strategy_means = (
+                dataset_frame.groupby(["model", "strategy"], as_index=False)[agg_cols]
+                .mean(numeric_only=True)
+            )
+            ranked = _ranking_columns(strategy_means)
+            if ranked.empty:
+                continue
+            best = ranked.iloc[0]
             full_bests[dataset_name] = {
                 "model": str(best["model"]),
                 "strategy": str(best["strategy"]),
-                "macro_f1": float(best["macro_f1"]),
-                "balanced_accuracy": float(best["balanced_accuracy"]),
+                "macro_f1": round(float(best["macro_f1"]), 4),
+                "balanced_accuracy": round(float(best["balanced_accuracy"]), 4),
             }
 
     datasets = sorted(
@@ -1616,7 +1738,7 @@ def _write_summary(
     summary = {
         "task": ANNOTATION_TASK_SPEC.task_name,
         "datasets": datasets,
-        "strategies": list(BENCHMARK_MODELS),
+        "strategies": list(strategies),
         "full_label_rows": int(len(full_label_frame)),
         "low_label_rows": int(len(low_label_frame)),
         "cross_study_rows": int(len(cross_study_frame)),
@@ -1695,7 +1817,8 @@ def run_annotation_benchmark(
     profile: str,
     strategies: tuple[str, ...],
     output_dir: Path,
-    seeds: tuple[int, ...],
+    n_folds: int,
+    seed: int,
     label_fractions: tuple[float, ...],
     cross_study_folds: tuple[str, ...],
     resume: bool = False,
@@ -1722,17 +1845,12 @@ def run_annotation_benchmark(
             )
             prepared: ScGPTPreparedData | None = None
             if dataset_name == "openproblems_human_pancreas" and scgpt_strategies:
-                prepared = prepare_scgpt_data(
+                prepared = _prepare_scgpt_data_for_dataset(
+                    dataset_name,
                     adata,
-                    checkpoint="whole-human",
                     label_key=label_key,
-                    batch_size=64,
-                    use_raw=True,
-                    min_gene_overlap=profile_settings["min_gene_overlap"],
-                )
-                prepared = _truncate_prepared_data(
-                    prepared,
-                    max_token_length=profile_settings["token_max_length"],
+                    profile_settings=profile_settings,
+                    pancreas_prepared=None,
                 )
             if "full_label" in regimes and "full_label" in dataset_spec.regimes:
                 rows.extend(
@@ -1742,7 +1860,8 @@ def run_annotation_benchmark(
                         prepared=prepared,
                         label_key=label_key,
                         batch_key=batch_key,
-                        seeds=seeds,
+                        n_folds=n_folds,
+                        seed=seed,
                         strategies=strategies,
                         output_dir=output_dir,
                         profile_settings=profile_settings,
@@ -1759,7 +1878,8 @@ def run_annotation_benchmark(
                         prepared=prepared,
                         label_key=label_key,
                         batch_key=batch_key,
-                        seeds=seeds,
+                        n_folds=n_folds,
+                        seed=seed,
                         label_fractions=label_fractions,
                         strategies=strategies,
                         output_dir=output_dir,
@@ -1781,7 +1901,7 @@ def run_annotation_benchmark(
                         prepared=prepared,
                         label_key=label_key,
                         batch_key=batch_key,
-                        seeds=seeds,
+                        seed=seed,
                         fold_names=cross_study_folds,
                         strategies=strategies,
                         output_dir=output_dir,
@@ -1792,7 +1912,8 @@ def run_annotation_benchmark(
                 )
 
     existing_rows = _collect_existing_rows(output_dir)
-    frame = _ordered_frame(existing_rows)
+    merged_rows = _merge_rows(rows, existing_rows)
+    frame = _ordered_frame(merged_rows)
     if frame.empty:
         full_label_frame = pd.DataFrame()
         low_label_frame = pd.DataFrame()
@@ -1828,15 +1949,16 @@ def run_annotation_benchmark(
         low_label_frame=low_label_frame,
         cross_study_frame=cross_study_frame,
         output_dir=output_dir,
-        completed_rows=len(existing_rows),
+        completed_rows=len(merged_rows),
         expected_rows=_expected_row_count(
             datasets=datasets,
             regimes=regimes,
             strategies=strategies,
-            seeds=seeds,
+            n_folds=n_folds,
             label_fractions=label_fractions,
             cross_study_folds=cross_study_folds,
         ),
+        strategies=strategies,
     )
     _sync_tutorial_bundle(output_dir)
     return {
@@ -1885,7 +2007,8 @@ def main() -> None:
         profile=str(args.profile),
         strategies=tuple(args.strategies),
         output_dir=args.output_dir,
-        seeds=tuple(int(seed) for seed in args.seeds),
+        n_folds=int(args.n_folds),
+        seed=int(args.seed),
         label_fractions=tuple(float(value) for value in args.label_fractions),
         cross_study_folds=tuple(str(value) for value in args.cross_study_folds),
         resume=bool(args.resume),

@@ -21,7 +21,7 @@
 | Metrics | accuracy, macro_f1, balanced_accuracy, AUROC | + weighted_f1, precision, recall, Cohen's kappa, MCC, per-class |
 | Figures | Basic bar charts | Publication-quality with error bars, confidence bands, heatmaps, radar |
 | Per-class analysis | None | Per-class F1 heatmap |
-| Error bars | None (single mean) | Mean +/- std across 3 seeds |
+| Error bars | None (single mean) | Mean +/- std across 5-fold CV |
 
 ## Benchmark Design (Based on Literature)
 
@@ -77,7 +77,7 @@ Strategy-specific hyperparameters:
 **Main text figures:**
 
 1. **Performance comparison** (Fig 2-style):
-   - Grouped bar chart with error bars (mean +/- std across 3 seeds)
+   - Grouped bar chart with error bars (mean +/- std across 5-fold CV)
    - One panel per dataset (PBMC, Pancreas)
    - Shows macro_f1, weighted_f1, balanced_accuracy side by side
    - Strategies ordered from baseline to most complex PEFT

@@ -28,7 +28,8 @@ class AnnotationRegimeSpec:
     """Execution contract for one annotation benchmark regime."""
 
     name: str
-    seeds: tuple[int, ...]
+    n_folds: int
+    seed: int
     val_size: float
     test_size: float | None = None
     label_fractions: tuple[float, ...] = ()
@@ -63,14 +64,16 @@ PANCREAS_ANNOTATION_DATASET = AnnotationDatasetSpec(
 
 FULL_LABEL_REGIME = AnnotationRegimeSpec(
     name="full_label",
-    seeds=(42, 52, 62),
+    n_folds=5,
+    seed=42,
     val_size=0.15,
     test_size=0.15,
 )
 
 LOW_LABEL_REGIME = AnnotationRegimeSpec(
     name="low_label",
-    seeds=(42, 52, 62),
+    n_folds=5,
+    seed=42,
     val_size=0.15,
     test_size=0.15,
     label_fractions=(0.01, 0.05, 0.10),
@@ -78,7 +81,8 @@ LOW_LABEL_REGIME = AnnotationRegimeSpec(
 
 CROSS_STUDY_REGIME = AnnotationRegimeSpec(
     name="cross_study",
-    seeds=(42, 52, 62),
+    n_folds=1,
+    seed=42,
     val_size=0.15,
     cross_study_folds=(
         CrossStudyFoldSpec(name="plate_like", held_out_batches=("smartseq2", "smarter")),
