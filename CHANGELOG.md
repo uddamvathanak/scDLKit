@@ -7,6 +7,7 @@
 - Normalized the live OpenProblems pancreas schema into the canonical internal annotation fields expected by the cached subset builder and public tutorial path.
 - Hardened the heavy pancreas evidence workflow by reusing saved trainable checkpoints instead of retraining the best model and by isolating the heavier path outside normal PR CI.
 - Updated GitHub Actions maintenance dependencies to the current action major versions and raised the heavy evidence workflow timeout so the beyond-PBMC path can complete cleanly.
+- Refreshed the project logo, docs logo mark, and favicon assets for the 0.1.7 fine-tuning release.
 
 ## 0.1.6
 
