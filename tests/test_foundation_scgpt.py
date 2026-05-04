@@ -123,6 +123,31 @@ def test_ensure_scgpt_checkpoint_downloads_into_cache(
     assert (target / "best_model.pt").exists()
 
 
+def test_ensure_scgpt_checkpoint_supports_download_folder_without_legacy_options(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source_root = tmp_path / "download_source" / "scGPT_human"
+    _write_checkpoint_dir(source_root)
+
+    def fake_download_folder(
+        *,
+        id: str,
+        output: str,
+        quiet: bool,
+    ) -> list[str]:
+        assert id
+        assert quiet is False
+        destination = Path(output) / "scGPT_human"
+        shutil.copytree(source_root, destination, dirs_exist_ok=True)
+        return [str(destination / "args.json")]
+
+    monkeypatch.setattr("scdlkit.foundation.cache.gdown.download_folder", fake_download_folder)
+    target = ensure_scgpt_checkpoint("whole-human", cache_dir=tmp_path / "cache")
+    assert (target / "args.json").exists()
+    assert (target / "best_model.pt").exists()
+
+
 def test_prepare_scgpt_data_builds_tokenized_dataset(
     scgpt_cache_dir: Path,
     scgpt_adata: AnnData,

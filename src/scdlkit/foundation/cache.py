@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import importlib
+import inspect
 import os
 import shutil
 from pathlib import Path
+from typing import Any
 
 from platformdirs import user_cache_dir
 
+gdown: Any | None
 try:
-    import gdown
+    gdown = importlib.import_module("gdown")
 except ImportError:  # pragma: no cover - exercised in minimal-install CI
     gdown = None
 
@@ -82,6 +86,24 @@ def _resolve_download_root(path: Path) -> Path:
     raise RuntimeError(msg)
 
 
+def _download_scgpt_folder(gdown_module: Any, *, folder_id: str, output: Path) -> Any:
+    download_kwargs: dict[str, Any] = {
+        "id": folder_id,
+        "output": str(output),
+        "quiet": False,
+    }
+    download_folder = gdown_module.download_folder
+    try:
+        supported_parameters = set(inspect.signature(download_folder).parameters)
+    except (TypeError, ValueError):
+        supported_parameters = set()
+    if "remaining_ok" in supported_parameters:
+        download_kwargs["remaining_ok"] = True
+    if "resume" in supported_parameters:
+        download_kwargs["resume"] = True
+    return download_folder(**download_kwargs)
+
+
 def ensure_scgpt_checkpoint(
     checkpoint: str = DEFAULT_SCGPT_CHECKPOINT,
     *,
@@ -115,12 +137,10 @@ def ensure_scgpt_checkpoint(
         )
         raise ImportError(msg)
 
-    downloaded_files = gdown.download_folder(
-        id=checkpoint_info["folder_id"],
-        output=str(download_dir),
-        quiet=False,
-        remaining_ok=True,
-        resume=True,
+    downloaded_files = _download_scgpt_folder(
+        gdown,
+        folder_id=checkpoint_info["folder_id"],
+        output=download_dir,
     )
     if not downloaded_files:
         msg = f"Failed to download scGPT checkpoint '{checkpoint}'."
