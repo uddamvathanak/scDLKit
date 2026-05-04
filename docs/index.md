@@ -1,104 +1,58 @@
 # scDLKit
 
-scDLKit is moving from a baseline toolkit identity toward a publication-first
-research program with a software artifact attached to it.
+scDLKit helps you train, compare, and reuse deep-learning workflows for
+single-cell data while staying inside the familiar `AnnData` and Scanpy
+ecosystem.
 
-## Available now
+Use it when you want:
 
-Today the public repo supports two main entrypoints:
+- baseline autoencoder, VAE, transformer, and classifier workflows without
+  writing the PyTorch loop yourself
+- embeddings written back to `adata.obsm` for downstream Scanpy analysis
+- reproducible metrics, reports, and tutorial artifacts
+- experimental scGPT cell-type annotation and fine-tuning on labeled human
+  scRNA-seq data
 
-- stable baseline workflows through `TaskRunner`
-- experimental labeled annotation adaptation through `adapt_annotation(...)`
-- a static published annotation tutorial and status page for docs review
-
-The current implemented scope is still narrower than the paper target:
-
-- stable deep-learning baselines for single-cell workflows
-- Scanpy handoff through `adata.obsm`
-- experimental scGPT annotation adaptation on labeled human scRNA-seq
-- beyond-PBMC annotation evidence on human pancreas
-
-## Paper target
-
-The paper target is:
-
-**scDLKit is a minimal-code, AnnData-native framework for parameter-efficient adaptation and reproducible benchmarking of single-cell and spatial foundation models.**
-
-That target expands the repo in two directions:
-
-- model breadth:
-  - `scGPT`
-  - `scFoundation`
-  - `CellFM`
-  - `Nicheformer`
-- task breadth:
-  - annotation
-  - integration
-  - perturbation
-  - spatial
-
-Use the [roadmap](./roadmap.md) when you want the full distinction between
-paper target and current implementation truth.
-
-## Main research task map
+## Start with your task
 
 ````{grid} 1 2 2 2
 :gutter: 3
 
-```{grid-item-card} Cell type annotation
+```{grid-item-card} Train a baseline embedding
+:link: _tutorials/scanpy_pbmc_quickstart
+:link-type: doc
+
+Fit a VAE or other bundled model, save the learned representation in
+`adata.obsm`, then continue with neighbors, UMAP, Leiden clustering, and plots
+in Scanpy.
+```
+
+```{grid-item-card} Fine-tune for cell-type annotation
 :link: _tutorials/scgpt_human_pancreas_annotation
 :link-type: doc
 
-Status: `Pilot`
-
-Main question:
-Can scDLKit already support a credible low-code adaptation story on labeled
-human data?
-
-Current implementation note:
-The pilot currently runs on the experimental scGPT path only. The published
-quickstart tutorial compares `frozen_probe` and `head`, while the heavier
-annotation benchmark matrix extends to full fine-tuning, `lora`, `adapter`,
-`prefix_tuning`, and `ia3`.
+Use `adapt_annotation(...)` to compare frozen scGPT embeddings with a
+head-tuned annotation model, annotate cells, and save the fitted runner.
 ```
 
-```{grid-item-card} Integration / representation transfer
-:link: /roadmap#integration-pillar
-:link-type: url
+```{grid-item-card} Compare model behavior
+:link: _tutorials/pbmc_model_comparison
+:link-type: doc
 
-Status: `Planned`
-
-Main question:
-Can adapted representations transfer across studies and batches under a
-standardized benchmark?
+Run compact comparisons across classical and deep-learning baselines and review
+the resulting metrics and plots.
 ```
 
-```{grid-item-card} Perturbation-response prediction
-:link: /roadmap#perturbation-pillar
-:link-type: url
+```{grid-item-card} Check current scope
+:link: roadmap
+:link-type: doc
 
-Status: `Planned`
-
-Main question:
-Can the framework benchmark adaptation strategies on perturbation-response
-tasks?
-```
-
-```{grid-item-card} Spatial domain / niche classification
-:link: /roadmap#spatial-pillar
-:link-type: url
-
-Status: `Planned`
-
-Main question:
-Can scDLKit support a real spatial pillar anchored by Nicheformer rather than a
-future placeholder?
+See what is available now, what is experimental, and what is planned for the
+next research milestones.
 ```
 ````
 
-## Current entrypoints
-
-### Stable baseline path
+## Stable baseline path
 
 ```python
 import scanpy as sc
@@ -120,15 +74,22 @@ runner.fit(adata)
 adata.obsm["X_scdlkit_vae"] = runner.encode(adata)
 ```
 
-Use this when you want the stable baseline workflow.
+Continue in Scanpy:
 
-Related docs:
+```python
+sc.pp.neighbors(adata, use_rep="X_scdlkit_vae")
+sc.tl.umap(adata)
+sc.pl.umap(adata, color="louvain")
+```
 
+Useful links:
+
+- [Install scDLKit](./install.md)
 - [TaskRunner API](./api/taskrunner.md)
 - [Scanpy PBMC quickstart](/_tutorials/scanpy_pbmc_quickstart)
 - [Downstream Scanpy after scDLKit](/_tutorials/downstream_scanpy_after_scdlkit)
 
-### Experimental annotation path
+## Experimental scGPT annotation path
 
 ```python
 from scdlkit import adapt_annotation
@@ -138,34 +99,44 @@ runner = adapt_annotation(
     label_key="cell_type",
     output_dir="artifacts/scgpt_annotation",
 )
-runner.annotate_adata(adata)
+
+runner.annotate_adata(
+    adata,
+    obs_key="scgpt_label",
+    embedding_key="X_scgpt_best",
+)
 runner.save("artifacts/scgpt_annotation/best_model")
 ```
 
-Use this when you want the current low-code research-facing adaptation path.
+This path is experimental and intentionally narrow in `0.1.7`:
 
-Related docs:
+- human scRNA-seq data only
+- official scGPT `whole-human` checkpoint only
+- labeled cell-type annotation only
+- default quickstart comparison: `frozen_probe` and `head`
 
-- [Experimental annotation quickstart API](./api/annotation.md)
-- [Main annotation tutorial: human-pancreas wrapper workflow](/_tutorials/scgpt_human_pancreas_annotation)
-- [Experimental scGPT dataset-specific annotation](/_tutorials/scgpt_dataset_specific_annotation)
-- [Tutorial execution status](./tutorials/status.md)
-- [Roadmap](./roadmap.md)
+Useful links:
 
-## Supporting workflows
-
-- [Tutorial map](./tutorials/index.md)
-- [Tutorial execution status](./tutorials/status.md)
-- [Scanpy integration guide](./guides/scanpy-integration.md)
-- [Annotation benchmarks guide](./guides/annotation-benchmarks.md)
+- [Main annotation tutorial: human-pancreas workflow](/_tutorials/scgpt_human_pancreas_annotation)
+- [Experimental annotation API](./api/annotation.md)
 - [Foundation-model guide](./guides/foundation-models.md)
+- [Annotation benchmarks guide](./guides/annotation-benchmarks.md)
+
+## What is included now
+
+- AnnData-native data handling for common supervised and representation tasks
+- bundled baseline models for embeddings, reconstruction, and classification
+- model comparison, evaluation metrics, plots, and Markdown/CSV reports
+- Scanpy handoff through `adata.obsm`
+- experimental scGPT annotation adaptation with save/load support
+- executed public tutorials and a [tutorial status page](./tutorials/status.md)
 
 ## Workflow snapshots
 
 ```{figure} _static/pbmc_vae_latent_umap.png
 :alt: Latent UMAP from the Scanpy PBMC quickstart
 
-Quickstart embedding colored by the PBMC reference labels.
+Quickstart embedding colored by PBMC reference labels.
 ```
 
 ```{figure} _static/pbmc_downstream_leiden_umap.png
@@ -174,14 +145,14 @@ Quickstart embedding colored by the PBMC reference labels.
 Leiden clustering on the same embedding after handing control back to Scanpy.
 ```
 
-## Current scope
+## What is next
 
-- Scanpy still owns raw-data preprocessing, QC, and most exploratory analysis.
-- scDLKit currently owns model training, evaluation, comparison, and output
-  handoff.
-- the current public implementation is still gene-expression-first
-- the paper target is broader than the current implementation and must remain
-  labeled as such
+The next milestone is integration / representation transfer: comparing whether
+methods reduce batch effects while preserving biological cell-type structure.
+That work is tracked separately and is not part of the `0.1.7` release.
+
+See the [roadmap](./roadmap.md) for planned annotation, integration,
+perturbation, and spatial directions.
 
 ```{toctree}
 :hidden:
