@@ -29,7 +29,7 @@ _OPENPROBLEMS_PANCREAS_BENCHMARK_URL = (
     "https://theislab.github.io/scib-reproducibility/dataset_pancreas.html"
 )
 _PROFILE_CONFIG: dict[str, dict[str, int]] = {
-    "quickstart": {"max_cells": 512, "max_genes": 1024, "seed": 42},
+    "quickstart": {"max_cells": 128, "max_genes": 768, "seed": 42},
     "full": {"max_cells": 2048, "max_genes": 2048, "seed": 42},
 }
 _TOP_CELL_TYPES = 8
@@ -123,6 +123,22 @@ def _processed_metadata_path(
 def _write_json(path: Path, payload: dict[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def _read_json(path: Path) -> dict[str, object]:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _processed_cache_matches_profile(metadata_path: Path, profile_config: dict[str, int]) -> bool:
+    try:
+        metadata = _read_json(metadata_path)
+    except (OSError, json.JSONDecodeError):
+        return False
+    return (
+        metadata.get("max_cells") == profile_config["max_cells"]
+        and metadata.get("max_genes") == profile_config["max_genes"]
+        and metadata.get("seed") == profile_config["seed"]
+    )
 
 
 def _write_h5ad_with_nullable_strings(adata: AnnData, path: Path) -> None:
@@ -473,6 +489,8 @@ def _build_processed_subset(
         "selected_cell_types": sorted(label_counts.index.tolist()),
         "num_cells": int(canonical.n_obs),
         "num_genes": int(canonical.n_vars),
+        "max_cells": int(profile_config["max_cells"]),
+        "max_genes": int(profile_config["max_genes"]),
         "min_class_count": int(label_counts.min()),
         "num_batches": batch_count,
         "seed": int(profile_config["seed"]),
@@ -543,6 +561,7 @@ def load_openproblems_pancreas_annotation_dataset(
     if profile not in _PROFILE_CONFIG:
         msg = f"Unsupported pancreas annotation profile '{profile}'."
         raise ValueError(msg)
+    profile_config = _PROFILE_CONFIG[profile]
     spec = _resolve_spec(_OPENPROBLEMS_PANCREAS)
     raw_path = ensure_openproblems_dataset(
         spec.dataset_id,
@@ -551,7 +570,12 @@ def load_openproblems_pancreas_annotation_dataset(
     )
     processed_path = _processed_dataset_path(spec, profile, cache_dir)
     metadata_path = _processed_metadata_path(spec, profile, cache_dir)
-    if processed_path.exists() and metadata_path.exists() and not force_rebuild:
+    if (
+        processed_path.exists()
+        and metadata_path.exists()
+        and not force_rebuild
+        and _processed_cache_matches_profile(metadata_path, profile_config)
+    ):
         return read_h5ad(processed_path)
 
     processed, metadata = _build_processed_subset(
